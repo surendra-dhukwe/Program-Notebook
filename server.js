@@ -2,34 +2,55 @@ require("dotenv").config();
 
 const dns = require("dns");
 
-// Force Node.js MongoDB DNS lookup through Google DNS
 dns.setServers([
   "8.8.8.8",
-  "8.8.4.4"
+  "8.8.4.4",
 ]);
 
 const express = require("express");
 const cors = require("cors");
 const path = require("path");
 const mongoose = require("mongoose");
+const bcrypt = require("bcryptjs");
+const jwt = require("jsonwebtoken");
 
 const app = express();
 
 const PORT = process.env.PORT || 5000;
 
+const JWT_SECRET =
+  process.env.JWT_SECRET ||
+  "program-notebook-secret-2026";
+
 // =====================================================
 // MIDDLEWARE
 // =====================================================
 
-app.use(cors());
-
 app.use(
-  express.json({
-    limit: "2mb",
+  cors({
+    origin: true,
+    credentials: true,
   })
 );
 
-app.use(express.static(path.join(__dirname, "public")));
+app.use(
+  express.json({
+    limit: "5mb",
+  })
+);
+
+app.use(
+  express.urlencoded({
+    extended: true,
+    limit: "5mb",
+  })
+);
+
+app.use(
+  express.static(
+    path.join(__dirname, "public")
+  )
+);
 
 // =====================================================
 // MONGODB
@@ -37,8 +58,44 @@ app.use(express.static(path.join(__dirname, "public")));
 
 mongoose
   .connect(process.env.MONGO_URI)
-  .then(() => {
+  .then(async () => {
+    console.log("======================================");
     console.log("MongoDB connected successfully");
+    console.log("======================================");
+
+    // -------------------------------------------------
+    // REMOVE USERS WITHOUT PASSWORD
+    // -------------------------------------------------
+
+    try {
+      const result =
+        await User.deleteMany({
+          $or: [
+            {
+              password: {
+                $exists: false,
+              },
+            },
+            {
+              password: null,
+            },
+            {
+              password: "",
+            },
+          ],
+        });
+
+      if (result.deletedCount > 0) {
+        console.log(
+          `Removed ${result.deletedCount} password-less user(s).`
+        );
+      }
+    } catch (cleanupError) {
+      console.error(
+        "USER CLEANUP ERROR:",
+        cleanupError.message
+      );
+    }
   })
   .catch((err) => {
     console.error(
@@ -51,199 +108,705 @@ mongoose
 // USER SCHEMA
 // =====================================================
 
-const userSchema = new mongoose.Schema({
-  name: {
-    type: String,
-    required: true,
-    trim: true,
-    unique: true,
-  },
+const userSchema =
+  new mongoose.Schema(
+    {
+      name: {
+        type: String,
+        required: true,
+        trim: true,
+        unique: true,
+      },
 
-  createdAt: {
-    type: Date,
-    default: Date.now,
-  },
-});
+      password: {
+        type: String,
+        required: true,
+      },
+
+      createdAt: {
+        type: Date,
+        default: Date.now,
+      },
+    },
+    {
+      collection: "users",
+    }
+  );
 
 // =====================================================
 // NOTE SCHEMA
 // =====================================================
 
-const noteSchema = new mongoose.Schema({
-  subject: {
-    type: String,
-    required: true,
-    trim: true,
-  },
+const noteSchema =
+  new mongoose.Schema(
+    {
+      subject: {
+        type: String,
+        required: true,
+        trim: true,
+      },
 
-  question: {
-    type: String,
-    required: true,
-    trim: true,
-  },
+      question: {
+        type: String,
+        required: true,
+        trim: true,
+      },
 
-  answer: {
-    type: String,
-    required: true,
-  },
+      answer: {
+        type: String,
+        required: true,
+      },
 
-  code: {
-    type: String,
-    default: "",
-  },
+      code: {
+        type: String,
+        default: "",
+      },
 
-  language: {
-    type: String,
-    default: "text",
-  },
+      language: {
+        type: String,
+        default: "text",
+      },
 
-  userName: {
-    type: String,
-    required: true,
-    trim: true,
-  },
+      userName: {
+        type: String,
+        required: true,
+        trim: true,
+      },
 
-  createdAt: {
-    type: Date,
-    default: Date.now,
-  },
+      visibility: {
+        type: String,
+        enum: [
+          "public",
+          "private",
+        ],
+        default: "private",
+      },
 
-  updatedAt: {
-    type: Date,
-    default: Date.now,
-  },
-});
+      createdAt: {
+        type: Date,
+        default: Date.now,
+      },
 
-const User = mongoose.model(
-  "User",
-  userSchema
-);
+      updatedAt: {
+        type: Date,
+        default: Date.now,
+      },
+    },
+    {
+      collection: "notes",
+    }
+  );
 
-const Note = mongoose.model(
-  "Note",
-  noteSchema
-);
+const User =
+  mongoose.model(
+    "User",
+    userSchema
+  );
+
+const Note =
+  mongoose.model(
+    "Note",
+    noteSchema
+  );
+
+// =====================================================
+// HELPER
+// =====================================================
+
+function createToken(user) {
+  return jwt.sign(
+    {
+      userId: String(user._id),
+      name: user.name,
+    },
+    JWT_SECRET,
+    {
+      expiresIn: "7d",
+    }
+  );
+}
 
 // =====================================================
 // API STATUS
 // =====================================================
 
-app.get("/api/status", (req, res) => {
-  res.json({
-    status: "online",
-    server: "Program Notebook",
-    database:
-      mongoose.connection.readyState === 1
-        ? "connected"
-        : "disconnected",
-    time: new Date(),
-  });
-});
+app.get(
+  "/api/status",
+  (req, res) => {
+    res.json({
+      success: true,
+      status: "online",
+      server: "Program Notebook",
+      database:
+        mongoose.connection.readyState === 1
+          ? "connected"
+          : "disconnected",
+      time: new Date(),
+    });
+  }
+);
 
 // =====================================================
-// CREATE / GET USER
+// CHECK USER
 // =====================================================
 
-app.post("/api/users", async (req, res) => {
+async function checkUser(req, res) {
   try {
-    console.log("=================================");
-    console.log("POST /api/users RECEIVED");
-    console.log("BODY:", req.body);
-    console.log("=================================");
-
-    const name = String(req.body?.name || "").trim();
+    const name = String(
+      req.body?.name ||
+      req.body?.userName ||
+      ""
+    ).trim();
 
     if (!name) {
       return res.status(400).json({
         success: false,
-        message: "Name is required"
+        message: "User ID is required",
       });
     }
 
-    // Find existing user
-    let user = await User.findOne({ name: name });
+    let user =
+      await User.findOne({
+        name,
+      });
 
-    // Create if doesn't exist
+    // -------------------------------------------------
+    // USER DOES NOT EXIST
+    // -------------------------------------------------
+
     if (!user) {
-      user = new User({
-        name: name
+      return res.json({
+        success: true,
+        exists: false,
+        hasPassword: false,
       });
-
-      await user.save();
     }
 
-    console.log("USER:", user);
+    // -------------------------------------------------
+    // USER WITHOUT PASSWORD
+    // DELETE AUTOMATICALLY
+    // -------------------------------------------------
 
-    return res.status(200).json({
+    if (
+      !user.password ||
+      typeof user.password !== "string"
+    ) {
+      await User.deleteOne({
+        _id: user._id,
+      });
+
+      return res.json({
+        success: true,
+        exists: false,
+        hasPassword: false,
+        deleted: true,
+      });
+    }
+
+    // -------------------------------------------------
+    // VALID USER
+    // -------------------------------------------------
+
+    return res.json({
       success: true,
+      exists: true,
+      hasPassword: true,
+
       user: {
-        id: user._id,
+        id: String(user._id),
+        _id: String(user._id),
         name: user.name,
-        createdAt: user.createdAt
-      }
+        createdAt: user.createdAt,
+      },
     });
-
   } catch (error) {
-
-    console.error("=================================");
-    console.error("CREATE USER ERROR");
-    console.error(error);
-    console.error("=================================");
+    console.error(
+      "CHECK USER ERROR:",
+      error
+    );
 
     return res.status(500).json({
       success: false,
-      message: error.message
+      message:
+        error.message ||
+        "Unable to check user",
     });
   }
-});
+}
+
+app.post(
+  "/api/auth/check",
+  checkUser
+);
+
+app.post(
+  "/api/users/check",
+  checkUser
+);
 
 // =====================================================
-// GET NOTES
+// REGISTER
 // =====================================================
 
-app.get("/api/notes", async (req, res) => {
+async function registerUser(req, res) {
   try {
-    const userName = String(
-      req.query.user || ""
+    const name = String(
+      req.body?.name ||
+      req.body?.userName ||
+      ""
     ).trim();
 
-    if (!userName) {
+    const password = String(
+      req.body?.password || ""
+    );
+
+    const confirmPassword =
+      String(
+        req.body?.confirmPassword ||
+        req.body?.confirm ||
+        ""
+      );
+
+    if (!name) {
       return res.status(400).json({
-        message: "User name is required",
+        success: false,
+        message: "User ID is required",
       });
     }
 
-    const notes = await Note.find({
-      userName,
-    }).sort({
-      createdAt: -1,
+    if (!password) {
+      return res.status(400).json({
+        success: false,
+        message: "Password is required",
+      });
+    }
+
+    if (password.length < 4) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Password must be at least 4 characters",
+      });
+    }
+
+    if (
+      password !== confirmPassword
+    ) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Passwords do not match",
+      });
+    }
+
+    const existingUser =
+      await User.findOne({
+        name,
+      });
+
+    if (existingUser) {
+      return res.status(409).json({
+        success: false,
+        exists: true,
+        message:
+          "This User ID already exists. Please login.",
+      });
+    }
+
+    const hashedPassword =
+      await bcrypt.hash(
+        password,
+        12
+      );
+
+    const user =
+      await User.create({
+        name,
+        password: hashedPassword,
+      });
+
+    const token =
+      createToken(user);
+
+    const userData = {
+      id: String(user._id),
+      _id: String(user._id),
+      name: user.name,
+      createdAt: user.createdAt,
+    };
+
+    return res.status(201).json({
+      success: true,
+      message:
+        "Account created successfully",
+      token,
+      user: userData,
+
+      data: {
+        token,
+        user: userData,
+      },
     });
+  } catch (error) {
+    console.error(
+      "REGISTER ERROR:",
+      error
+    );
 
-    res.json(notes);
-  } catch (err) {
-    console.error(err);
+    if (
+      error.code === 11000
+    ) {
+      return res.status(409).json({
+        success: false,
+        exists: true,
+        message:
+          "This User ID already exists. Please login.",
+      });
+    }
 
-    res.status(500).json({
-      message: err.message,
+    return res.status(500).json({
+      success: false,
+      message:
+        error.message ||
+        "Registration failed",
     });
   }
-});
+}
+
+app.post(
+  "/api/auth/register",
+  registerUser
+);
+
+app.post(
+  "/api/users/register",
+  registerUser
+);
 
 // =====================================================
-// GET SUBJECTS
+// LOGIN
+// =====================================================
+
+async function loginUser(req, res) {
+  try {
+    const name = String(
+      req.body?.name ||
+      req.body?.userName ||
+      ""
+    ).trim();
+
+    const password = String(
+      req.body?.password || ""
+    );
+
+    if (!name) {
+      return res.status(400).json({
+        success: false,
+        message: "User ID is required",
+      });
+    }
+
+    if (!password) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Password is required",
+      });
+    }
+
+    const user =
+      await User.findOne({
+        name,
+      });
+
+    // -------------------------------------------------
+    // USER NOT FOUND
+    // -------------------------------------------------
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        exists: false,
+        message:
+          "User not found. Please create a new account.",
+      });
+    }
+
+    // -------------------------------------------------
+    // PASSWORDLESS USER
+    // DELETE
+    // -------------------------------------------------
+
+    if (
+      !user.password ||
+      typeof user.password !== "string"
+    ) {
+      await User.deleteOne({
+        _id: user._id,
+      });
+
+      return res.status(404).json({
+        success: false,
+        exists: false,
+        deleted: true,
+        message:
+          "This User ID was removed because it had no password.",
+      });
+    }
+
+    // -------------------------------------------------
+    // PASSWORD
+    // -------------------------------------------------
+
+    const passwordMatch =
+      await bcrypt.compare(
+        password,
+        user.password
+      );
+
+    if (!passwordMatch) {
+      return res.status(401).json({
+        success: false,
+        message:
+          "Incorrect password",
+      });
+    }
+
+    // -------------------------------------------------
+    // TOKEN
+    // -------------------------------------------------
+
+    const token =
+      createToken(user);
+
+    const userData = {
+      id: String(user._id),
+      _id: String(user._id),
+      name: user.name,
+      createdAt: user.createdAt,
+    };
+
+    console.log(
+      "LOGIN SUCCESS:",
+      user.name
+    );
+
+    return res.status(200).json({
+      success: true,
+      message:
+        "Login successful",
+
+      token,
+
+      user: userData,
+
+      data: {
+        token,
+        user: userData,
+      },
+    });
+  } catch (error) {
+    console.error(
+      "LOGIN ERROR:",
+      error
+    );
+
+    return res.status(500).json({
+      success: false,
+      message:
+        error.message ||
+        "Login failed",
+    });
+  }
+}
+
+app.post(
+  "/api/auth/login",
+  loginUser
+);
+
+app.post(
+  "/api/users/login",
+  loginUser
+);
+
+// =====================================================
+// CREATE USER LEGACY
+// =====================================================
+//
+// IMPORTANT:
+// This route NO LONGER creates passwordless users.
+// =====================================================
+
+app.post(
+  "/api/users",
+  async (req, res) => {
+    return res.status(400).json({
+      success: false,
+      message:
+        "Please use /api/auth/register to create an account.",
+    });
+  }
+);
+
+// =====================================================
+// GET MY NOTES
+// =====================================================
+
+app.get(
+  "/api/notes",
+  async (req, res) => {
+    try {
+      const userName =
+        String(
+          req.query.user || ""
+        ).trim();
+
+      if (!userName) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "User name is required",
+        });
+      }
+
+      const notes =
+        await Note.find({
+          userName,
+        }).sort({
+          createdAt: -1,
+        });
+
+      return res.json(notes);
+    } catch (error) {
+      console.error(
+        "GET NOTES ERROR:",
+        error
+      );
+
+      return res.status(500).json({
+        success: false,
+        message:
+          error.message,
+      });
+    }
+  }
+);
+
+// =====================================================
+// GET PUBLIC NOTES
+// =====================================================
+
+app.get(
+  "/api/public-notes",
+  async (req, res) => {
+    try {
+      const notes =
+        await Note.find({
+          visibility: "public",
+        })
+          .sort({
+            createdAt: -1,
+          })
+          .limit(200)
+          .lean();
+
+      return res.json(notes);
+    } catch (error) {
+      console.error(
+        "PUBLIC NOTES ERROR:",
+        error
+      );
+
+      return res.status(500).json({
+        success: false,
+        message:
+          error.message,
+      });
+    }
+  }
+);
+
+// =====================================================
+// VISIBLE NOTES
+// =====================================================
+//
+// Current user's private notes
+// +
+// ALL users' public notes
+//
+// Other users' private notes NEVER returned.
+// =====================================================
+
+app.get(
+  "/api/visible-notes",
+  async (req, res) => {
+    try {
+      const userName =
+        String(
+          req.query.user || ""
+        ).trim();
+
+      if (!userName) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "User name is required",
+        });
+      }
+
+      const notes =
+        await Note.find({
+          $or: [
+            {
+              userName,
+              visibility: "private",
+            },
+            {
+              visibility: "public",
+            },
+          ],
+        })
+          .sort({
+            createdAt: -1,
+          })
+          .limit(300)
+          .lean();
+
+      return res.json(notes);
+    } catch (error) {
+      console.error(
+        "VISIBLE NOTES ERROR:",
+        error
+      );
+
+      return res.status(500).json({
+        success: false,
+        message:
+          error.message,
+      });
+    }
+  }
+);
+
+// =====================================================
+// SUBJECTS - CURRENT USER
 // =====================================================
 
 app.get(
   "/api/subjects",
   async (req, res) => {
     try {
-      const userName = String(
-        req.query.user || ""
-      ).trim();
+      const userName =
+        String(
+          req.query.user || ""
+        ).trim();
 
       if (!userName) {
         return res.status(400).json({
-          message: "User name is required",
+          success: false,
+          message:
+            "User name is required",
         });
       }
 
@@ -271,17 +834,79 @@ app.get(
           },
         ]);
 
-      res.json(
-        subjects.map((item) => ({
-          name: item._id,
-          count: item.count,
-        }))
+      return res.json(
+        subjects.map(
+          (item) => ({
+            name: item._id,
+            count: item.count,
+          })
+        )
       );
-    } catch (err) {
-      console.error(err);
+    } catch (error) {
+      console.error(
+        "SUBJECTS ERROR:",
+        error
+      );
 
-      res.status(500).json({
-        message: err.message,
+      return res.status(500).json({
+        success: false,
+        message:
+          error.message,
+      });
+    }
+  }
+);
+
+// =====================================================
+// PUBLIC SUBJECTS
+// =====================================================
+
+app.get(
+  "/api/public-subjects",
+  async (req, res) => {
+    try {
+      const subjects =
+        await Note.aggregate([
+          {
+            $match: {
+              visibility: "public",
+            },
+          },
+
+          {
+            $group: {
+              _id: "$subject",
+              count: {
+                $sum: 1,
+              },
+            },
+          },
+
+          {
+            $sort: {
+              _id: 1,
+            },
+          },
+        ]);
+
+      return res.json(
+        subjects.map(
+          (item) => ({
+            name: item._id,
+            count: item.count,
+          })
+        )
+      );
+    } catch (error) {
+      console.error(
+        "PUBLIC SUBJECTS ERROR:",
+        error
+      );
+
+      return res.status(500).json({
+        success: false,
+        message:
+          error.message,
       });
     }
   }
@@ -291,60 +916,130 @@ app.get(
 // CREATE NOTE
 // =====================================================
 
-app.post("/api/notes", async (req, res) => {
-  try {
-    const {
-      subject,
-      question,
-      answer,
-      code,
-      language,
-      userName,
-    } = req.body;
+app.post(
+  "/api/notes",
+  async (req, res) => {
+    try {
+      const {
+        subject,
+        question,
+        answer,
+        code,
+        language,
+        userName,
+        visibility,
+      } = req.body;
 
-    if (
-      !subject ||
-      !question ||
-      !answer ||
-      !userName
-    ) {
-      return res.status(400).json({
+      const cleanUserName =
+        String(
+          userName || ""
+        ).trim();
+
+      const cleanSubject =
+        String(
+          subject || ""
+        ).trim();
+
+      const cleanQuestion =
+        String(
+          question || ""
+        ).trim();
+
+      const cleanAnswer =
+        String(
+          answer || ""
+        );
+
+      const cleanCode =
+        String(
+          code || ""
+        );
+
+      const cleanLanguage =
+        String(
+          language || "text"
+        );
+
+      const noteVisibility =
+        visibility === "public"
+          ? "public"
+          : "private";
+
+      if (
+        !cleanSubject ||
+        !cleanQuestion ||
+        !cleanAnswer ||
+        !cleanUserName
+      ) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Subject, question, answer and user name are required",
+        });
+      }
+
+      // -------------------------------------------------
+      // ONLY REAL USERS CAN CREATE NOTES
+      // -------------------------------------------------
+
+      const user =
+        await User.findOne({
+          name: cleanUserName,
+        });
+
+      if (
+        !user ||
+        !user.password
+      ) {
+        return res.status(401).json({
+          success: false,
+          message:
+            "Valid logged-in user required",
+        });
+      }
+
+      const note =
+        await Note.create({
+          subject: cleanSubject,
+
+          question: cleanQuestion,
+
+          answer: cleanAnswer,
+
+          code: cleanCode,
+
+          language: cleanLanguage,
+
+          userName:
+            cleanUserName,
+
+          visibility:
+            noteVisibility,
+
+          createdAt:
+            new Date(),
+
+          updatedAt:
+            new Date(),
+        });
+
+      return res.status(201).json(
+        note
+      );
+    } catch (error) {
+      console.error(
+        "CREATE NOTE ERROR:",
+        error
+      );
+
+      return res.status(500).json({
+        success: false,
         message:
-          "Subject, question, answer and user name are required",
+          error.message,
       });
     }
-
-    const note = await Note.create({
-      subject: String(subject).trim(),
-
-      question: String(question).trim(),
-
-      answer: String(answer),
-
-      code: String(code || ""),
-
-      language: String(
-        language || "text"
-      ),
-
-      userName: String(
-        userName
-      ).trim(),
-
-      createdAt: new Date(),
-
-      updatedAt: new Date(),
-    });
-
-    res.status(201).json(note);
-  } catch (err) {
-    console.error(err);
-
-    res.status(500).json({
-      message: err.message,
-    });
   }
-});
+);
 
 // =====================================================
 // UPDATE NOTE
@@ -354,7 +1049,8 @@ app.put(
   "/api/notes/:id",
   async (req, res) => {
     try {
-      const id = req.params.id;
+      const id =
+        req.params.id;
 
       const {
         subject,
@@ -363,15 +1059,22 @@ app.put(
         code,
         language,
         userName,
+        visibility,
       } = req.body;
+
+      const cleanUserName =
+        String(
+          userName || ""
+        ).trim();
 
       if (
         !subject ||
         !question ||
         !answer ||
-        !userName
+        !cleanUserName
       ) {
         return res.status(400).json({
+          success: false,
           message:
             "Subject, question, answer and user name are required",
         });
@@ -382,26 +1085,41 @@ app.put(
           {
             _id: id,
             userName:
-              String(userName).trim(),
+              cleanUserName,
           },
 
           {
             subject:
-              String(subject).trim(),
+              String(
+                subject
+              ).trim(),
 
             question:
-              String(question).trim(),
+              String(
+                question
+              ).trim(),
 
             answer:
-              String(answer),
+              String(
+                answer
+              ),
 
             code:
-              String(code || ""),
+              String(
+                code || ""
+              ),
 
             language:
               String(
-                language || "text"
+                language ||
+                "text"
               ),
+
+            visibility:
+              visibility ===
+              "public"
+                ? "public"
+                : "private",
 
             updatedAt:
               new Date(),
@@ -415,17 +1133,115 @@ app.put(
 
       if (!note) {
         return res.status(404).json({
+          success: false,
           message:
             "Note not found or permission denied",
         });
       }
 
-      res.json(note);
-    } catch (err) {
-      console.error(err);
+      return res.json(
+        note
+      );
+    } catch (error) {
+      console.error(
+        "UPDATE NOTE ERROR:",
+        error
+      );
 
-      res.status(500).json({
-        message: err.message,
+      return res.status(500).json({
+        success: false,
+        message:
+          error.message,
+      });
+    }
+  }
+);
+
+// =====================================================
+// CHANGE VISIBILITY
+// =====================================================
+
+app.patch(
+  "/api/notes/:id/visibility",
+  async (req, res) => {
+    try {
+      const id =
+        req.params.id;
+
+      const userName =
+        String(
+          req.body?.userName ||
+          ""
+        ).trim();
+
+      const visibility =
+        req.body?.visibility;
+
+      if (!userName) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "User name is required",
+        });
+      }
+
+      if (
+        ![
+          "public",
+          "private",
+        ].includes(
+          visibility
+        )
+      ) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Visibility must be public or private",
+        });
+      }
+
+      const note =
+        await Note.findOneAndUpdate(
+          {
+            _id: id,
+            userName,
+          },
+
+          {
+            visibility,
+            updatedAt:
+              new Date(),
+          },
+
+          {
+            new: true,
+          }
+        );
+
+      if (!note) {
+        return res.status(404).json({
+          success: false,
+          message:
+            "Note not found or permission denied",
+        });
+      }
+
+      return res.json({
+        success: true,
+        message:
+          `Note is now ${visibility}`,
+        note,
+      });
+    } catch (error) {
+      console.error(
+        "VISIBILITY ERROR:",
+        error
+      );
+
+      return res.status(500).json({
+        success: false,
+        message:
+          error.message,
       });
     }
   }
@@ -439,14 +1255,17 @@ app.delete(
   "/api/notes/:id",
   async (req, res) => {
     try {
-      const id = req.params.id;
+      const id =
+        req.params.id;
 
-      const userName = String(
-        req.query.user || ""
-      ).trim();
+      const userName =
+        String(
+          req.query.user || ""
+        ).trim();
 
       if (!userName) {
         return res.status(400).json({
+          success: false,
           message:
             "User name is required",
         });
@@ -455,28 +1274,52 @@ app.delete(
       const note =
         await Note.findOneAndDelete({
           _id: id,
-
           userName,
         });
 
       if (!note) {
         return res.status(404).json({
+          success: false,
           message:
             "Note not found or permission denied",
         });
       }
 
-      res.json({
+      return res.json({
+        success: true,
         message:
           "Note deleted successfully",
       });
-    } catch (err) {
-      console.error(err);
+    } catch (error) {
+      console.error(
+        "DELETE NOTE ERROR:",
+        error
+      );
 
-      res.status(500).json({
-        message: err.message,
+      return res.status(500).json({
+        success: false,
+        message:
+          error.message,
       });
     }
+  }
+);
+
+// =====================================================
+// API 404
+// IMPORTANT
+// Never return index.html for an unknown API route.
+// =====================================================
+
+app.use(
+  "/api",
+  (req, res) => {
+    return res.status(404).json({
+      success: false,
+      message:
+        "API route not found",
+      route: req.originalUrl,
+    });
   }
 );
 
@@ -484,40 +1327,44 @@ app.delete(
 // FRONTEND FALLBACK
 // =====================================================
 
-// IMPORTANT:
-// Do NOT use app.get("*") with Express 5.
-
-app.use((req, res) => {
-  res.sendFile(
-    path.join(
-      __dirname,
-      "public",
-      "index.html"
-    )
-  );
-});
+app.use(
+  (req, res) => {
+    res.sendFile(
+      path.join(
+        __dirname,
+        "public",
+        "index.html"
+      )
+    );
+  }
+);
 
 // =====================================================
 // START SERVER
 // =====================================================
 
-app.listen(PORT, () => {
-  console.log("");
-  console.log(
-    "======================================"
-  );
-  console.log(
-    "       PROGRAM NOTEBOOK SERVER"
-  );
-  console.log(
-    "======================================"
-  );
-  console.log(
-    `Server: http://localhost:${PORT}`
-  );
-  console.log("Status: ONLINE");
-  console.log(
-    "======================================"
-  );
-  console.log("");
-});
+app.listen(
+  PORT,
+  () => {
+    console.log("");
+    console.log(
+      "======================================"
+    );
+    console.log(
+      "       PROGRAM NOTEBOOK SERVER"
+    );
+    console.log(
+      "======================================"
+    );
+    console.log(
+      `Server: http://localhost:${PORT}`
+    );
+    console.log(
+      "Status: ONLINE"
+    );
+    console.log(
+      "======================================"
+    );
+    console.log("");
+  }
+);

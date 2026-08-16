@@ -1,251 +1,1342 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
   <title>Program Notebook</title>
 
+  <!-- Google Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
 
-  <link rel="stylesheet"
-        href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism-tomorrow.min.css">
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&display=swap"
+    rel="stylesheet"
+  >
+
+  <!-- Prism -->
+  <link
+    rel="stylesheet"
+    href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism-tomorrow.min.css"
+  >
+
+  <!-- Main CSS -->
   <link rel="stylesheet" href="style.css">
 </head>
+
 <body>
+
+  <!-- =====================================================
+       TOAST
+  ====================================================== -->
 
   <div id="toast"></div>
 
+
+  <!-- =====================================================
+       LOGIN SCREEN
+  ====================================================== -->
+
   <section id="loginScreen" class="login-screen">
+
     <div class="login-glow glow-one"></div>
     <div class="login-glow glow-two"></div>
 
     <div class="login-card">
-      <div class="brand-mark">PN</div>
-      <span class="eyebrow">YOUR PERSONAL KNOWLEDGE SPACE</span>
-      <h1>Program<br><span>Notebook</span></h1>
-      <p>Save programming questions, answers and code in one clean notebook.</p>
 
-      <label for="nameInput">Enter your name</label>
-      <div class="name-box">
-        <span>✦</span>
-        <input id="nameInput" type="text" placeholder="e.g. Surendra" maxlength="40">
+      <div class="brand-mark">
+        PN
       </div>
 
-      <button id="startBtn" class="primary-btn">Open My Notebook <span>→</span></button>
-      <small>Your name becomes your notebook profile.</small>
+      <span class="eyebrow">
+        YOUR PERSONAL KNOWLEDGE SPACE
+      </span>
+
+      <h1>
+        Program<br>
+        <span>Notebook</span>
+      </h1>
+
+      <p id="authDescription">
+        Save programming questions, answers and code in one clean notebook.
+      </p>
+
+
+      <!-- =================================================
+           USER ID
+      ================================================== -->
+
+      <div id="userStep">
+
+        <label for="nameInput">
+          Enter your User ID
+        </label>
+
+        <div class="name-box">
+
+          <span>✦</span>
+
+          <input
+            id="nameInput"
+            type="text"
+            placeholder="e.g. Surendra"
+            maxlength="40"
+            autocomplete="username"
+          >
+
+        </div>
+
+        <button
+          id="startBtn"
+          class="primary-btn"
+          type="button"
+        >
+          Continue
+          <span>→</span>
+        </button>
+
+        <small>
+          Enter your existing User ID or create a new one.
+        </small>
+
+      </div>
+
+
+      <!-- =================================================
+           EXISTING USER LOGIN
+      ================================================== -->
+
+      <div id="passwordStep" class="hidden">
+
+        <label for="passwordInput">
+          Password
+        </label>
+
+        <div class="name-box password-box">
+
+          <span>🔐</span>
+
+          <input
+            id="passwordInput"
+            type="password"
+            placeholder="Enter your password"
+            maxlength="100"
+            autocomplete="current-password"
+          >
+
+          <button
+            id="togglePassword"
+            type="button"
+            class="password-toggle"
+            title="Show password"
+            aria-label="Show password"
+          >
+            👁
+          </button>
+
+        </div>
+
+        <button
+          id="loginBtn"
+          class="primary-btn"
+          type="button"
+        >
+          Login
+          <span>→</span>
+        </button>
+
+        <button
+          id="backToUser"
+          type="button"
+          class="soft-btn auth-back-btn"
+        >
+          ← Change User ID
+        </button>
+
+        <small id="passwordMessage">
+          Enter your password to open your notebook.
+        </small>
+
+      </div>
+
+
+      <!-- =================================================
+           CREATE ACCOUNT
+      ================================================== -->
+
+      <div id="createStep" class="hidden">
+
+        <div class="new-user-message">
+
+          <span>✦</span>
+
+          <div>
+
+            <strong id="newUserName">
+              User
+            </strong>
+
+            <p>
+              This User ID is available. Create a password to protect your notebook.
+            </p>
+
+          </div>
+
+        </div>
+
+
+        <label for="createPasswordInput">
+          Create Password
+        </label>
+
+        <div class="name-box password-box">
+
+          <span>🔐</span>
+
+          <input
+            id="createPasswordInput"
+            type="password"
+            placeholder="Create a password"
+            maxlength="100"
+            autocomplete="new-password"
+          >
+
+          <button
+            id="toggleCreatePassword"
+            type="button"
+            class="password-toggle"
+            title="Show password"
+            aria-label="Show password"
+          >
+            👁
+          </button>
+
+        </div>
+
+
+        <label for="confirmPasswordInput">
+          Confirm Password
+        </label>
+
+        <div class="name-box password-box">
+
+          <span>✓</span>
+
+          <input
+            id="confirmPasswordInput"
+            type="password"
+            placeholder="Confirm your password"
+            maxlength="100"
+            autocomplete="new-password"
+          >
+
+          <button
+            id="toggleConfirmPassword"
+            type="button"
+            class="password-toggle"
+            title="Show password"
+            aria-label="Show password"
+          >
+            👁
+          </button>
+
+        </div>
+
+        <button
+          id="createBtn"
+          class="primary-btn"
+          type="button"
+        >
+          Create Notebook
+          <span>→</span>
+        </button>
+
+        <button
+          id="backToUserFromCreate"
+          type="button"
+          class="soft-btn auth-back-btn"
+        >
+          ← Change User ID
+        </button>
+
+        <small>
+          Your password will be protected and will not be displayed.
+        </small>
+
+      </div>
+
     </div>
+
   </section>
+
+
+  <!-- =====================================================
+       MAIN APPLICATION
+  ====================================================== -->
 
   <div id="app" class="app hidden">
 
+
+    <!-- ===================================================
+         SIDEBAR
+    ==================================================== -->
+
     <aside class="sidebar">
+
       <div class="sidebar-brand">
-        <div class="brand-mark small">PN</div>
+
+        <div class="brand-mark small">
+          PN
+        </div>
+
         <div>
           <strong>Program</strong>
           <span>Notebook</span>
         </div>
+
       </div>
+
+
+      <!-- PROFILE -->
 
       <div class="profile-mini">
-        <div id="avatar" class="avatar">S</div>
-        <div>
-          <b id="sideName">User</b>
-          <span>My Notebook</span>
+
+        <div id="avatar" class="avatar">
+          S
         </div>
+
+        <div>
+
+          <b id="sideName">
+            User
+          </b>
+
+          <span>
+            My Notebook
+          </span>
+
+        </div>
+
       </div>
+
+
+      <!-- NAVIGATION -->
 
       <nav class="side-nav">
-        <button class="nav-btn active" data-page="home">
-          <span>⌂</span> Home
+
+        <button
+          class="nav-btn active"
+          data-page="home"
+          type="button"
+        >
+          <span>⌂</span>
+          Home
         </button>
-        <button class="nav-btn" data-page="notes">
-          <span>▤</span> Notes
+
+        <button
+          class="nav-btn"
+          data-page="notes"
+          type="button"
+        >
+          <span>▤</span>
+          Notes
         </button>
-        <button class="nav-btn" data-page="add">
-          <span>＋</span> Add
+
+        <button
+          class="nav-btn"
+          data-page="add"
+          type="button"
+        >
+          <span>＋</span>
+          Add
         </button>
-        <button class="nav-btn" data-page="profile">
-          <span>◎</span> Profile
+
+        <button
+          class="nav-btn"
+          data-page="profile"
+          type="button"
+        >
+          <span>◎</span>
+          Profile
         </button>
+
       </nav>
 
+
+      <!-- SIDEBAR BOTTOM -->
+
       <div class="sidebar-bottom">
+
         <div class="tip-box">
+
           <span>⌘</span>
-          <p>Keep your important concepts here.</p>
+
+          <p>
+            Keep your important concepts here.
+          </p>
+
         </div>
-        <button id="logoutBtn" class="logout-btn">↪ Change User</button>
+
+        <button
+          id="logoutBtn"
+          class="logout-btn"
+          type="button"
+        >
+          ↪ Logout
+        </button>
+
       </div>
+
     </aside>
 
+
+    <!-- ===================================================
+         MAIN
+    ==================================================== -->
+
     <main class="main">
+
+
+      <!-- =================================================
+           TOPBAR
+      ================================================== -->
+
       <header class="topbar">
+
         <div>
-          <span class="top-label">PERSONAL LEARNING SPACE</span>
-          <h2 id="pageTitle">Home</h2>
+
+          <span class="top-label">
+            PERSONAL LEARNING SPACE
+          </span>
+
+          <h2 id="pageTitle">
+            Home
+          </h2>
+
         </div>
+
         <div class="top-actions">
-          <button id="searchBtn" class="icon-btn" title="Search">⌕</button>
+
+          <button
+            id="searchBtn"
+            class="icon-btn"
+            title="Search"
+            type="button"
+          >
+            ⌕
+          </button>
+
           <div class="user-chip">
-            <span id="topAvatar">S</span>
-            <b id="topName">User</b>
+
+            <span id="topAvatar">
+              S
+            </span>
+
+            <b id="topName">
+              User
+            </b>
+
           </div>
+
         </div>
+
       </header>
 
-      <div id="searchPanel" class="search-panel hidden">
-        <input id="searchInput" placeholder="Search subject, question or answer...">
+
+      <!-- =================================================
+           SEARCH
+      ================================================== -->
+
+      <div
+        id="searchPanel"
+        class="search-panel hidden"
+      >
+
+        <input
+          id="searchInput"
+          type="search"
+          placeholder="Search subject, question or answer..."
+          autocomplete="off"
+        >
+
       </div>
 
-      <section id="homePage" class="page active-page">
+
+      <!-- =================================================
+           HOME
+      ================================================== -->
+
+      <section
+        id="homePage"
+        class="page active-page"
+      >
+
         <div class="hero">
+
           <div>
-            <span class="eyebrow">WELCOME BACK</span>
-            <h1>Welcome <span id="welcomeName">User</span> 👋</h1>
-            <p>Explore your notebook in a random learning sequence.</p>
+
+            <span class="eyebrow">
+              WELCOME BACK
+            </span>
+
+            <h1>
+              Welcome
+              <span id="welcomeName">
+                User
+              </span>
+              👋
+            </h1>
+
+            <p>
+              Explore your notebook in a random learning sequence.
+            </p>
+
           </div>
-          <button id="randomBtn" class="soft-btn">⤨ Randomize</button>
+
+          <button
+            id="randomBtn"
+            class="soft-btn"
+            type="button"
+          >
+            ⤨ Randomize
+          </button>
+
         </div>
+
+
+        <!-- STATS -->
 
         <div class="stats-row">
+
           <div class="stat-card">
-            <span>SUBJECTS</span>
-            <strong id="subjectCount">0</strong>
+
+            <span>
+              SUBJECTS
+            </span>
+
+            <strong id="subjectCount">
+              0
+            </strong>
+
           </div>
+
           <div class="stat-card">
-            <span>QUESTIONS</span>
-            <strong id="questionCount">0</strong>
+
+            <span>
+              QUESTIONS
+            </span>
+
+            <strong id="questionCount">
+              0
+            </strong>
+
           </div>
+
           <div class="stat-card">
-            <span>PROFILE</span>
-            <strong id="profileLabel">—</strong>
+
+            <span>
+              PROFILE
+            </span>
+
+            <strong id="profileLabel">
+              —
+            </strong>
+
           </div>
+
         </div>
+
+
+        <!-- FEED -->
 
         <div class="section-heading">
+
           <div>
-            <span class="eyebrow">ALL KNOWLEDGE</span>
-            <h3>Learning Feed</h3>
+
+            <span class="eyebrow">
+              ALL KNOWLEDGE
+            </span>
+
+            <h3>
+              Learning Feed
+            </h3>
+
           </div>
-          <span id="feedCount" class="count-pill">0 notes</span>
+
+          <span
+            id="feedCount"
+            class="count-pill"
+          >
+            0 notes
+          </span>
+
         </div>
 
-        <div id="randomFeed" class="feed"></div>
+        <div
+          id="randomFeed"
+          class="feed"
+        ></div>
+
+
+        <!-- THANK YOU -->
 
         <div class="thank-you">
-          <div class="thank-icon">✦</div>
-          <h2>Thank you for visiting my Program Notebook website.</h2>
-          <p>Keep learning. Keep building. Keep your best answers here.</p>
+
+          <div class="thank-icon">
+            ✦
+          </div>
+
+          <h2>
+            Thank you for visiting my Program Notebook website.
+          </h2>
+
+          <p>
+            Keep learning. Keep building. Keep your best answers here.
+          </p>
+
         </div>
+
       </section>
 
-      <section id="notesPage" class="page">
+
+      <!-- =================================================
+           NOTES
+      ================================================== -->
+
+      <section
+        id="notesPage"
+        class="page"
+      >
+
         <div class="page-intro">
-          <span class="eyebrow">ORGANIZED KNOWLEDGE</span>
-          <h1>Notes</h1>
-          <p>Select a subject → select a question → open its answer.</p>
+
+          <span class="eyebrow">
+            ORGANIZED KNOWLEDGE
+          </span>
+
+          <h1>
+            Notes
+          </h1>
+
+          <p>
+            Select a subject → select a question → open its answer.
+          </p>
+
         </div>
+
 
         <div class="notes-layout">
-          <div id="subjectList" class="subject-list"></div>
 
-          <div id="questionArea" class="question-area">
+          <div
+            id="subjectList"
+            class="subject-list"
+          ></div>
+
+          <div
+            id="questionArea"
+            class="question-area"
+          >
+
             <div class="empty-state">
-              <div>←</div>
-              <h3>Select a subject</h3>
-              <p>Your questions will appear here.</p>
+
+              <div>
+                ←
+              </div>
+
+              <h3>
+                Select a subject
+              </h3>
+
+              <p>
+                Your questions will appear here.
+              </p>
+
             </div>
+
           </div>
+
         </div>
+
       </section>
 
-      <section id="addPage" class="page">
+
+      <!-- =================================================
+           ADD NOTE
+      ================================================== -->
+
+      <section
+        id="addPage"
+        class="page"
+      >
+
         <div class="page-intro">
-          <span class="eyebrow">BUILD YOUR NOTEBOOK</span>
-          <h1>Add New Note</h1>
-          <p>Create a new subject or choose an existing one and add a question with its answer.</p>
+
+          <span class="eyebrow">
+            BUILD YOUR NOTEBOOK
+          </span>
+
+          <h1>
+            Add New Note
+          </h1>
+
+          <p>
+            Create a new subject or choose an existing one and add a question with its answer.
+          </p>
+
         </div>
 
-        <form id="noteForm" class="form-card">
+
+        <form
+          id="noteForm"
+          class="form-card"
+        >
+
           <div class="form-grid">
+
+
+            <!-- SUBJECT -->
+
             <div class="field full">
-              <label>Subject</label>
+
+              <label for="subjectInput">
+                Subject
+              </label>
+
               <div class="subject-input-wrap">
-                <input id="subjectInput" list="subjectOptions" placeholder="Type a new subject or choose existing" required>
+
+                <input
+                  id="subjectInput"
+                  list="subjectOptions"
+                  placeholder="Type a new subject or choose existing"
+                  maxlength="100"
+                  required
+                >
+
                 <datalist id="subjectOptions"></datalist>
+
               </div>
-              <small>Existing subject name = add under that subject. New name = new subject.</small>
+
+              <small>
+                Existing subject name = add under that subject.
+                New name = new subject.
+              </small>
+
             </div>
 
-            <div class="field full">
-              <label>Question</label>
-              <input id="questionInput" placeholder="e.g. What is a JavaScript closure?" required>
-            </div>
+
+            <!-- QUESTION -->
 
             <div class="field full">
-              <label>Answer</label>
-              <textarea id="answerInput" rows="7" placeholder="Write the explanation here..." required></textarea>
+
+              <label for="questionInput">
+                Question
+              </label>
+
+              <input
+                id="questionInput"
+                type="text"
+                placeholder="e.g. What is a JavaScript closure?"
+                maxlength="300"
+                required
+              >
+
             </div>
 
+
+            <!-- ANSWER -->
+
             <div class="field full">
-              <label>Code <span class="optional">(optional)</span></label>
-              <textarea id="codeInput" rows="9" placeholder="// Paste your code here"></textarea>
-              <small>Code is automatically shown in a separate professional code block.</small>
+
+              <label for="answerInput">
+                Answer
+              </label>
+
+              <textarea
+                id="answerInput"
+                rows="7"
+                placeholder="Write the explanation here..."
+                required
+              ></textarea>
+
             </div>
+
+
+            <!-- VISIBILITY -->
+
+            <div class="field full">
+
+              <label>
+                Note Visibility
+              </label>
+
+              <div class="visibility-selector">
+
+
+                <!-- PRIVATE -->
+
+                <label
+                  class="visibility-option"
+                  for="privateOption"
+                >
+
+                  <input
+                    id="privateOption"
+                    type="radio"
+                    name="noteVisibility"
+                    value="private"
+                    checked
+                  >
+
+                  <div class="visibility-card">
+
+                    <div class="visibility-icon">
+                      🔒
+                    </div>
+
+                    <div class="visibility-content">
+
+                      <strong>
+                        Private
+                      </strong>
+
+                      <span>
+                        Only you can see this note.
+                      </span>
+
+                    </div>
+
+                  </div>
+
+                </label>
+
+
+                <!-- PUBLIC -->
+
+                <label
+                  class="visibility-option"
+                  for="publicOption"
+                >
+
+                  <input
+                    id="publicOption"
+                    type="radio"
+                    name="noteVisibility"
+                    value="public"
+                  >
+
+                  <div class="visibility-card">
+
+                    <div class="visibility-icon">
+                      🌎
+                    </div>
+
+                    <div class="visibility-content">
+
+                      <strong>
+                        Public
+                      </strong>
+
+                      <span>
+                        Other users can see this note.
+                      </span>
+
+                    </div>
+
+                  </div>
+
+                </label>
+
+              </div>
+
+              <!-- JS/backend compatibility -->
+
+              <input
+                id="visibilityInput"
+                type="hidden"
+                value="private"
+              >
+
+              <!-- API compatibility -->
+
+              <input
+                id="privacyInput"
+                type="hidden"
+                value="private"
+              >
+
+              <small>
+                Private notes stay in your notebook.
+                Public notes can appear in the public learning feed.
+              </small>
+
+            </div>
+
+
+            <!-- LANGUAGE -->
+
+            <div class="field">
+
+              <label for="languageInput">
+                Code Language
+              </label>
+
+              <select id="languageInput">
+
+                <option value="javascript">
+                  JavaScript
+                </option>
+
+                <option value="python">
+                  Python
+                </option>
+
+                <option value="cpp">
+                  C++
+                </option>
+
+                <option value="java">
+                  Java
+                </option>
+
+                <option value="html">
+                  HTML
+                </option>
+
+                <option value="css">
+                  CSS
+                </option>
+
+                <option value="sql">
+                  SQL
+                </option>
+
+                <option value="text">
+                  Plain Text
+                </option>
+
+              </select>
+
+            </div>
+
+
+            <!-- CODE -->
+
+            <div class="field full">
+
+              <label for="codeInput">
+
+                Code
+
+                <span class="optional">
+                  (optional)
+                </span>
+
+              </label>
+
+              <textarea
+                id="codeInput"
+                rows="9"
+                placeholder="// Paste your code here"
+                spellcheck="false"
+              ></textarea>
+
+              <small>
+                Code is automatically shown in a separate professional code block.
+              </small>
+
+            </div>
+
           </div>
+
+
+          <!-- FORM FOOTER -->
 
           <div class="form-footer">
-            <button type="button" id="clearForm" class="soft-btn">Clear</button>
-            <button type="submit" class="primary-btn">Save to Notebook <span>→</span></button>
+
+            <button
+              type="button"
+              id="clearForm"
+              class="soft-btn"
+            >
+              Clear
+            </button>
+
+            <button
+              type="submit"
+              id="saveNoteBtn"
+              class="primary-btn"
+            >
+              SAVE NOTE
+              <span>→</span>
+            </button>
+
           </div>
+
         </form>
+
       </section>
 
-      <section id="profilePage" class="page">
+
+      <!-- =================================================
+           PROFILE
+      ================================================== -->
+
+      <section
+        id="profilePage"
+        class="page"
+      >
+
         <div class="profile-card">
-          <div id="bigAvatar" class="big-avatar">S</div>
-          <span class="eyebrow">NOTEBOOK PROFILE</span>
-          <h1 id="profileName">User</h1>
-          <p>This notebook is opened with your name.</p>
+
+          <div
+            id="bigAvatar"
+            class="big-avatar"
+          >
+            S
+          </div>
+
+          <span class="eyebrow">
+            NOTEBOOK PROFILE
+          </span>
+
+          <h1 id="profileName">
+            User
+          </h1>
+
+          <p>
+            Your notebook is protected with your personal login.
+          </p>
+
+
+          <!-- PROFILE STATS -->
 
           <div class="profile-stats">
-            <div><b id="profileSubjects">0</b><span>Subjects</span></div>
-            <div><b id="profileQuestions">0</b><span>Questions</span></div>
+
+            <div>
+
+              <b id="profileSubjects">
+                0
+              </b>
+
+              <span>
+                Subjects
+              </span>
+
+            </div>
+
+            <div>
+
+              <b id="profileQuestions">
+                0
+              </b>
+
+              <span>
+                Questions
+              </span>
+
+            </div>
+
           </div>
 
-          <button id="profileChangeBtn" class="soft-btn">Change User</button>
+
+          <button
+            id="profileChangeBtn"
+            class="soft-btn"
+            type="button"
+          >
+            Logout
+          </button>
+
         </div>
+
       </section>
+
     </main>
 
+
+    <!-- ===================================================
+         MOBILE NAV
+    ==================================================== -->
+
     <div class="mobile-nav">
-      <button class="nav-btn active" data-page="home"><span>⌂</span><small>Home</small></button>
-      <button class="nav-btn" data-page="notes"><span>▤</span><small>Notes</small></button>
-      <button class="nav-btn" data-page="add"><span>＋</span><small>Add</small></button>
-      <button class="nav-btn" data-page="profile"><span>◎</span><small>Profile</small></button>
+
+      <button
+        class="nav-btn active"
+        data-page="home"
+        type="button"
+      >
+        <span>⌂</span>
+        <small>Home</small>
+      </button>
+
+      <button
+        class="nav-btn"
+        data-page="notes"
+        type="button"
+      >
+        <span>▤</span>
+        <small>Notes</small>
+      </button>
+
+      <button
+        class="nav-btn"
+        data-page="add"
+        type="button"
+      >
+        <span>＋</span>
+        <small>Add</small>
+      </button>
+
+      <button
+        class="nav-btn"
+        data-page="profile"
+        type="button"
+      >
+        <span>◎</span>
+        <small>Profile</small>
+      </button>
+
     </div>
 
-    <div id="readerModal" class="reader-modal hidden">
+
+    <!-- ===================================================
+         READER MODAL
+    ==================================================== -->
+
+    <div
+      id="readerModal"
+      class="reader-modal hidden"
+    >
+
       <div class="reader-box">
-        <button id="closeReader" class="close-reader">×</button>
+
+        <button
+          id="closeReader"
+          class="close-reader"
+          type="button"
+          title="Close"
+        >
+          ×
+        </button>
+
+
+        <!-- READER HEADER -->
+
         <div class="reader-head">
-          <span id="readerSubject" class="subject-tag">Subject</span>
-          <h2 id="readerQuestion">Question</h2>
+
+          <div class="reader-top-info">
+
+            <span
+              id="readerNumber"
+              class="question-number"
+            >
+              Q.01
+            </span>
+
+            <span
+              id="readerSubject"
+              class="subject-tag"
+            >
+              Subject
+            </span>
+
+            <span
+              id="readerVisibility"
+              class="visibility-badge private"
+            >
+              🔒 Private
+            </span>
+
+          </div>
+
+          <h2 id="readerQuestion">
+            Question
+          </h2>
+
         </div>
-        <div id="readerAnswer" class="reader-answer"></div>
-        <div id="readerCodeWrap" class="reader-code hidden">
-          <div class="code-head"><span>CODE</span><button id="copyCode">Copy</button></div>
-          <pre><code id="readerCode" class="language-javascript"></code></pre>
+
+
+        <!-- ANSWER -->
+
+        <div
+          id="readerAnswer"
+          class="reader-answer"
+        ></div>
+
+
+        <!-- CODE -->
+
+        <div
+          id="readerCodeWrap"
+          class="reader-code hidden"
+        >
+
+          <div class="code-head">
+
+            <div>
+
+              <span>
+                CODE
+              </span>
+
+              <small id="readerLanguage">
+                JavaScript
+              </small>
+
+            </div>
+
+            <button
+              id="copyCode"
+              type="button"
+            >
+              Copy
+            </button>
+
+          </div>
+
+          <pre><code
+            id="readerCode"
+            class="language-javascript"
+          ></code></pre>
+
         </div>
+
+
+        <!-- FOOTER -->
+
+        <div class="reader-footer">
+
+          <div class="reader-navigation">
+
+            <button
+              id="prevQuestion"
+              class="soft-btn"
+              type="button"
+            >
+              ← Previous
+            </button>
+
+            <span
+              id="readerProgress"
+              class="reader-progress"
+            >
+              1 / 1
+            </span>
+
+            <button
+              id="nextQuestion"
+              class="soft-btn"
+              type="button"
+            >
+              Next →
+            </button>
+
+          </div>
+
+          <div class="reader-actions">
+
+            <button
+              id="editNote"
+              class="soft-btn"
+              type="button"
+            >
+              ✎ Edit
+            </button>
+
+            <button
+              id="deleteNote"
+              class="delete-btn"
+              type="button"
+            >
+              🗑 Delete
+            </button>
+
+          </div>
+
+        </div>
+
       </div>
+
     </div>
 
   </div>
 
+
+  <!-- =====================================================
+       PRISM
+  ====================================================== -->
+
   <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/prism.min.js"></script>
+
+
+  <!-- =====================================================
+       APP JS
+  ====================================================== -->
+
   <script src="app.js"></script>
+
+
+  <!-- =====================================================
+       VISIBILITY SYNC
+  ====================================================== -->
+
+  <script>
+    document.addEventListener("DOMContentLoaded", () => {
+
+      const privateOption =
+        document.getElementById("privateOption");
+
+      const publicOption =
+        document.getElementById("publicOption");
+
+      const visibilityInput =
+        document.getElementById("visibilityInput");
+
+      const privacyInput =
+        document.getElementById("privacyInput");
+
+
+      function syncVisibility() {
+
+        const value =
+          publicOption && publicOption.checked
+            ? "public"
+            : "private";
+
+
+        if (visibilityInput) {
+          visibilityInput.value = value;
+        }
+
+
+        if (privacyInput) {
+          privacyInput.value = value;
+        }
+
+      }
+
+
+      if (privateOption) {
+        privateOption.addEventListener(
+          "change",
+          syncVisibility
+        );
+      }
+
+
+      if (publicOption) {
+        publicOption.addEventListener(
+          "change",
+          syncVisibility
+        );
+      }
+
+
+      syncVisibility();
+
+    });
+  </script>
+
 </body>
 </html>
