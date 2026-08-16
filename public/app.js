@@ -275,33 +275,34 @@ async function startNotebook() {
     // EXISTING USER
     // -------------------------------------------------
 
-    if (
-      data.exists &&
-      data.hasPassword
-    ) {
-      $("userStep")?.classList.add(
-        "hidden"
-      );
+    // -------------------------------------------------
+// EXISTING USER
+// -------------------------------------------------
 
-      $("passwordStep")?.classList.remove(
-        "hidden"
-      );
+if (
+  data.exists &&
+  data.hasPassword
+) {
+  $("userStep")?.classList.add("hidden");
 
-      $("createStep")?.classList.add(
-        "hidden"
-      );
+  $("passwordStep")?.classList.remove("hidden");
 
-      $("passwordInput").value = "";
+  $("createStep")?.classList.add("hidden");
 
-      $("passwordInput")?.focus();
+  const passwordInput = $("passwordInput");
 
-      if ($("authDescription")) {
-        $("authDescription").textContent =
-          `Welcome back, ${name}. Enter your password to continue.`;
-      }
+  if (passwordInput) {
+    passwordInput.value = "";
+    passwordInput.focus();
+  }
 
-      return;
-    }
+  if ($("authDescription")) {
+    $("authDescription").textContent =
+      `Welcome back, ${name}. Enter your password to continue.`;
+  }
+
+  return;
+}
 
     // -------------------------------------------------
     // NEW USER
