@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Program Notebook</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet"
+        href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism-tomorrow.min.css">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <div id="toast"></div>
+
+  <section id="loginScreen" class="login-screen">
+    <div class="login-glow glow-one"></div>
+    <div class="login-glow glow-two"></div>
+
+    <div class="login-card">
+      <div class="brand-mark">PN</div>
+      <span class="eyebrow">YOUR PERSONAL KNOWLEDGE SPACE</span>
+      <h1>Program<br><span>Notebook</span></h1>
+      <p>Save programming questions, answers and code in one clean notebook.</p>
+
+      <label for="nameInput">Enter your name</label>
+      <div class="name-box">
+        <span>✦</span>
+        <input id="nameInput" type="text" placeholder="e.g. Surendra" maxlength="40">
+      </div>
+
+      <button id="startBtn" class="primary-btn">Open My Notebook <span>→</span></button>
+      <small>Your name becomes your notebook profile.</small>
+    </div>
+  </section>
+
+  <div id="app" class="app hidden">
+
+    <aside class="sidebar">
+      <div class="sidebar-brand">
+        <div class="brand-mark small">PN</div>
+        <div>
+          <strong>Program</strong>
+          <span>Notebook</span>
+        </div>
+      </div>
+
+      <div class="profile-mini">
+        <div id="avatar" class="avatar">S</div>
+        <div>
+          <b id="sideName">User</b>
+          <span>My Notebook</span>
+        </div>
+      </div>
+
+      <nav class="side-nav">
+        <button class="nav-btn active" data-page="home">
+          <span>⌂</span> Home
+        </button>
+        <button class="nav-btn" data-page="notes">
+          <span>▤</span> Notes
+        </button>
+        <button class="nav-btn" data-page="add">
+          <span>＋</span> Add
+        </button>
+        <button class="nav-btn" data-page="profile">
+          <span>◎</span> Profile
+        </button>
+      </nav>
+
+      <div class="sidebar-bottom">
+        <div class="tip-box">
+          <span>⌘</span>
+          <p>Keep your important concepts here.</p>
+        </div>
+        <button id="logoutBtn" class="logout-btn">↪ Change User</button>
+      </div>
+    </aside>
+
+    <main class="main">
+      <header class="topbar">
+        <div>
+          <span class="top-label">PERSONAL LEARNING SPACE</span>
+          <h2 id="pageTitle">Home</h2>
+        </div>
+        <div class="top-actions">
+          <button id="searchBtn" class="icon-btn" title="Search">⌕</button>
+          <div class="user-chip">
+            <span id="topAvatar">S</span>
+            <b id="topName">User</b>
+          </div>
+        </div>
+      </header>
+
+      <div id="searchPanel" class="search-panel hidden">
+        <input id="searchInput" placeholder="Search subject, question or answer...">
+      </div>
+
+      <section id="homePage" class="page active-page">
+        <div class="hero">
+          <div>
+            <span class="eyebrow">WELCOME BACK</span>
+            <h1>Welcome <span id="welcomeName">User</span> 👋</h1>
+            <p>Explore your notebook in a random learning sequence.</p>
+          </div>
+          <button id="randomBtn" class="soft-btn">⤨ Randomize</button>
+        </div>
+
+        <div class="stats-row">
+          <div class="stat-card">
+            <span>SUBJECTS</span>
+            <strong id="subjectCount">0</strong>
+          </div>
+          <div class="stat-card">
+            <span>QUESTIONS</span>
+            <strong id="questionCount">0</strong>
+          </div>
+          <div class="stat-card">
+            <span>PROFILE</span>
+            <strong id="profileLabel">—</strong>
+          </div>
+        </div>
+
+        <div class="section-heading">
+          <div>
+            <span class="eyebrow">ALL KNOWLEDGE</span>
+            <h3>Learning Feed</h3>
+          </div>
+          <span id="feedCount" class="count-pill">0 notes</span>
+        </div>
+
+        <div id="randomFeed" class="feed"></div>
+
+        <div class="thank-you">
+          <div class="thank-icon">✦</div>
+          <h2>Thank you for visiting my Program Notebook website.</h2>
+          <p>Keep learning. Keep building. Keep your best answers here.</p>
+        </div>
+      </section>
+
+      <section id="notesPage" class="page">
+        <div class="page-intro">
+          <span class="eyebrow">ORGANIZED KNOWLEDGE</span>
+          <h1>Notes</h1>
+          <p>Select a subject → select a question → open its answer.</p>
+        </div>
+
+        <div class="notes-layout">
+          <div id="subjectList" class="subject-list"></div>
+
+          <div id="questionArea" class="question-area">
+            <div class="empty-state">
+              <div>←</div>
+              <h3>Select a subject</h3>
+              <p>Your questions will appear here.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="addPage" class="page">
+        <div class="page-intro">
+          <span class="eyebrow">BUILD YOUR NOTEBOOK</span>
+          <h1>Add New Note</h1>
+          <p>Create a new subject or choose an existing one and add a question with its answer.</p>
+        </div>
+
+        <form id="noteForm" class="form-card">
+          <div class="form-grid">
+            <div class="field full">
+              <label>Subject</label>
+              <div class="subject-input-wrap">
+                <input id="subjectInput" list="subjectOptions" placeholder="Type a new subject or choose existing" required>
+                <datalist id="subjectOptions"></datalist>
+              </div>
+              <small>Existing subject name = add under that subject. New name = new subject.</small>
+            </div>
+
+            <div class="field full">
+              <label>Question</label>
+              <input id="questionInput" placeholder="e.g. What is a JavaScript closure?" required>
+            </div>
+
+            <div class="field full">
+              <label>Answer</label>
+              <textarea id="answerInput" rows="7" placeholder="Write the explanation here..." required></textarea>
+            </div>
+
+            <div class="field full">
+              <label>Code <span class="optional">(optional)</span></label>
+              <textarea id="codeInput" rows="9" placeholder="// Paste your code here"></textarea>
+              <small>Code is automatically shown in a separate professional code block.</small>
+            </div>
+          </div>
+
+          <div class="form-footer">
+            <button type="button" id="clearForm" class="soft-btn">Clear</button>
+            <button type="submit" class="primary-btn">Save to Notebook <span>→</span></button>
+          </div>
+        </form>
+      </section>
+
+      <section id="profilePage" class="page">
+        <div class="profile-card">
+          <div id="bigAvatar" class="big-avatar">S</div>
+          <span class="eyebrow">NOTEBOOK PROFILE</span>
+          <h1 id="profileName">User</h1>
+          <p>This notebook is opened with your name.</p>
+
+          <div class="profile-stats">
+            <div><b id="profileSubjects">0</b><span>Subjects</span></div>
+            <div><b id="profileQuestions">0</b><span>Questions</span></div>
+          </div>
+
+          <button id="profileChangeBtn" class="soft-btn">Change User</button>
+        </div>
+      </section>
+    </main>
+
+    <div class="mobile-nav">
+      <button class="nav-btn active" data-page="home"><span>⌂</span><small>Home</small></button>
+      <button class="nav-btn" data-page="notes"><span>▤</span><small>Notes</small></button>
+      <button class="nav-btn" data-page="add"><span>＋</span><small>Add</small></button>
+      <button class="nav-btn" data-page="profile"><span>◎</span><small>Profile</small></button>
+    </div>
+
+    <div id="readerModal" class="reader-modal hidden">
+      <div class="reader-box">
+        <button id="closeReader" class="close-reader">×</button>
+        <div class="reader-head">
+          <span id="readerSubject" class="subject-tag">Subject</span>
+          <h2 id="readerQuestion">Question</h2>
+        </div>
+        <div id="readerAnswer" class="reader-answer"></div>
+        <div id="readerCodeWrap" class="reader-code hidden">
+          <div class="code-head"><span>CODE</span><button id="copyCode">Copy</button></div>
+          <pre><code id="readerCode" class="language-javascript"></code></pre>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/prism.min.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
