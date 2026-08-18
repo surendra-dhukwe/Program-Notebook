@@ -94,24 +94,24 @@ async function apiRequest(
       `Bearer ${authToken}`;
   }
 
-  let response;
 
-  try {
-    response =
-      await fetch(url, {
-        ...options,
-        headers,
-      });
-  } catch (error) {
-    console.error(
-      "NETWORK ERROR:",
-      error
-    );
+let response;
 
-    throw new Error(
-      SERVER_DOWN_MESSAGE
-    );
-  }
+try {
+  response = await fetch(url, {
+    ...options,
+    headers,
+  });
+} catch (error) {
+  console.error(
+    "NETWORK ERROR:",
+    error
+  );
+
+  throw new Error(
+    SERVER_DOWN_MESSAGE
+  );
+}
 
   let text = "";
 
@@ -1288,10 +1288,10 @@ function renderQuestions(
                 type="button"
                 class="question-item"
                 data-question-id="${escapeHTML(
-                  String(
-                    note._id
-                  )
-                )}"
+  String(
+    note._id || note.id || ""
+  )
+)}"
               >
 
                 <span class="question-number">
@@ -1364,13 +1364,12 @@ function openReaderById(
   notes
 ) {
   const index =
-    notes.findIndex(
-      (note) =>
-        String(
-          note._id
-        ) ===
-        String(id)
-    );
+  notes.findIndex(
+    (note) =>
+      String(
+        note._id || note.id
+      ) === String(id)
+  );
 
   if (index < 0) {
     showToast(
@@ -2943,3 +2942,553 @@ document.addEventListener(
     }
   }
 );
+
+// async function askAssistant(message) {
+//   try {
+//     const response = await fetch(`${API_BASE}/assistant`, {
+//       method: "POST",
+
+//       headers: {
+//   "Content-Type": "application/json",
+//   ...(authToken && {
+//     Authorization: `Bearer ${authToken}`,
+//   }),
+// },
+
+//       body: JSON.stringify({
+//         message: message,
+//         userName: currentUser?.name || currentUser || "",
+//       }),
+//     });
+
+//     const data = await response.json();
+
+//     if (!data.success) {
+//       throw new Error(
+//         data.message || "Assistant error"
+//       );
+//     }
+
+//     return data.reply;
+
+//   } catch (error) {
+//     console.error("ASSISTANT ERROR:", error);
+
+//     return "Sorry, Assistant se response nahi mil raha.";
+//   }
+// }
+
+// =====================================================
+// PERSONAL ASSISTANT - PA MODE
+// =====================================================
+
+let paConversation = [];
+
+let paRecognition = null;
+
+let paListening = false;
+
+
+// =====================================================
+// ELEMENTS
+// =====================================================
+
+const paInput =
+  document.getElementById("paInput");
+
+const paSendBtn =
+  document.getElementById("paSendBtn");
+
+const paMicBtn =
+  document.getElementById("paMicBtn");
+
+const paMessages =
+  document.getElementById("paMessages");
+
+const paTyping =
+  document.getElementById("paTyping");
+
+const paVoiceToggle =
+  document.getElementById("paVoiceToggle");
+
+const paStopVoice =
+  document.getElementById("paStopVoice");
+
+const paClearBtn =
+  document.getElementById("paClearBtn");
+
+
+// =====================================================
+// ADD PA MESSAGE
+// =====================================================
+
+function addPAMessage(
+  message,
+  type = "assistant"
+) {
+
+  if (!paMessages) return;
+
+  const wrapper =
+    document.createElement("div");
+
+  wrapper.className =
+    `pa-message ${type}`;
+
+  const avatar =
+    document.createElement("div");
+
+  avatar.className =
+    "pa-message-avatar";
+
+  avatar.textContent =
+    type === "user"
+      ? "👤"
+      : "🤖";
+
+  const bubble =
+    document.createElement("div");
+
+  bubble.className =
+    "pa-bubble";
+
+  const title =
+    document.createElement("strong");
+
+  title.textContent =
+    type === "user"
+      ? "You"
+      : "PA Assistant";
+
+  const text =
+    document.createElement("div");
+
+  text.className =
+    "pa-text";
+
+  text.textContent =
+    message;
+
+  bubble.appendChild(title);
+  bubble.appendChild(text);
+
+  wrapper.appendChild(avatar);
+  wrapper.appendChild(bubble);
+
+  paMessages.appendChild(wrapper);
+
+  paMessages.scrollTop =
+    paMessages.scrollHeight;
+}
+
+
+// =====================================================
+// VOICE OUTPUT
+// =====================================================
+
+function speakPA(text) {
+
+  if (
+    !paVoiceToggle ||
+    !paVoiceToggle.checked
+  ) {
+    return;
+  }
+
+  if (
+    !("speechSynthesis" in window)
+  ) {
+    return;
+  }
+
+  window.speechSynthesis.cancel();
+
+  const cleanText =
+    text
+      .replace(/```[\s\S]*?```/g, "Code omitted.")
+      .replace(/[*_#`]/g, "")
+      .replace(/\n+/g, " ")
+      .trim();
+
+  if (!cleanText) return;
+
+  const utterance =
+    new SpeechSynthesisUtterance(
+      cleanText
+    );
+
+  utterance.rate = 1;
+  utterance.pitch = 1;
+  utterance.volume = 1;
+
+  // Try Hindi voice when response contains Hindi.
+  const voices =
+    window.speechSynthesis.getVoices();
+
+  const hindiVoice =
+    voices.find(
+      voice =>
+        voice.lang
+          ?.toLowerCase()
+          .startsWith("hi")
+    );
+
+  if (hindiVoice) {
+    utterance.voice =
+      hindiVoice;
+  }
+
+  window.speechSynthesis.speak(
+    utterance
+  );
+}
+
+
+// =====================================================
+// SEND MESSAGE
+// =====================================================
+
+async function sendPAMessage() {
+
+  if (!paInput) return;
+
+  const message =
+    paInput.value.trim();
+
+  if (!message) return;
+
+  paInput.value = "";
+
+  addPAMessage(
+    message,
+    "user"
+  );
+
+  paConversation.push({
+    role: "user",
+    content: message,
+  });
+
+  if (paTyping) {
+    paTyping.classList.remove(
+      "hidden"
+    );
+  }
+
+  if (paSendBtn) {
+    paSendBtn.disabled = true;
+  }
+
+  try {
+
+    const data =
+      await apiRequest(
+        "/assistant",
+        {
+          method: "POST",
+
+          body: JSON.stringify({
+            message,
+
+            userName:
+              currentUser?.name || "",
+
+            conversation:
+              paConversation,
+          }),
+        }
+      );
+
+    if (!data.success) {
+      throw new Error(
+        data.message ||
+        "Assistant failed"
+      );
+    }
+
+    const answer =
+      data.answer ||
+      data.reply ||
+      "I could not generate an answer.";
+
+    paConversation.push({
+      role: "assistant",
+      content: answer,
+    });
+
+    addPAMessage(
+      answer,
+      "assistant"
+    );
+
+    speakPA(answer);
+
+  } catch (error) {
+
+    console.error(
+      "PA MODE ERROR:",
+      error
+    );
+
+    addPAMessage(
+      `❌ ${
+        error.message ||
+        "Unable to contact Personal Assistant."
+      }`,
+      "assistant"
+    );
+
+  } finally {
+
+    if (paTyping) {
+      paTyping.classList.add(
+        "hidden"
+      );
+    }
+
+    if (paSendBtn) {
+      paSendBtn.disabled = false;
+    }
+
+    paInput?.focus();
+  }
+}
+
+
+// =====================================================
+// SEND BUTTON
+// =====================================================
+
+if (paSendBtn) {
+
+  paSendBtn.addEventListener(
+    "click",
+    sendPAMessage
+  );
+
+}
+
+
+// =====================================================
+// ENTER TO SEND
+// =====================================================
+
+if (paInput) {
+
+  paInput.addEventListener(
+    "keydown",
+    event => {
+
+      if (
+        event.key === "Enter" &&
+        !event.shiftKey
+      ) {
+
+        event.preventDefault();
+
+        sendPAMessage();
+
+      }
+
+    }
+  );
+
+}
+
+
+// =====================================================
+// STOP VOICE
+// =====================================================
+
+if (paStopVoice) {
+
+  paStopVoice.addEventListener(
+    "click",
+    () => {
+
+      if (
+        "speechSynthesis"
+        in window
+      ) {
+
+        window.speechSynthesis.cancel();
+
+      }
+
+    }
+  );
+
+}
+
+
+// =====================================================
+// CLEAR CHAT
+// =====================================================
+
+if (paClearBtn) {
+
+  paClearBtn.addEventListener(
+    "click",
+    () => {
+
+      paConversation = [];
+
+      if (paMessages) {
+
+        paMessages.innerHTML = `
+          <div class="pa-message assistant">
+
+            <div class="pa-message-avatar">
+              🤖
+            </div>
+
+            <div class="pa-bubble">
+
+              <strong>
+                PA Assistant
+              </strong>
+
+              <p>
+                Chat cleared. How can I help you? 👋
+              </p>
+
+            </div>
+
+          </div>
+        `;
+
+      }
+
+    }
+  );
+
+}
+
+
+// =====================================================
+// VOICE INPUT
+// =====================================================
+
+function setupPARecognition() {
+
+  const SpeechRecognition =
+    window.SpeechRecognition ||
+    window.webkitSpeechRecognition;
+
+  if (!SpeechRecognition) {
+
+    if (paMicBtn) {
+      paMicBtn.disabled = true;
+      paMicBtn.title =
+        "Voice input is not supported in this browser";
+    }
+
+    return;
+
+  }
+
+  paRecognition =
+    new SpeechRecognition();
+
+  paRecognition.continuous =
+    false;
+
+  paRecognition.interimResults =
+    false;
+
+  paRecognition.lang =
+    "hi-IN";
+
+
+  paRecognition.onstart = () => {
+
+    paListening = true;
+
+    if (paMicBtn) {
+      paMicBtn.textContent =
+        "🔴";
+    }
+
+  };
+
+
+  paRecognition.onresult =
+    event => {
+
+      const transcript =
+        event
+          .results[0][0]
+          .transcript;
+
+      if (paInput) {
+        paInput.value =
+          transcript;
+      }
+
+      sendPAMessage();
+
+    };
+
+
+  paRecognition.onerror =
+    event => {
+
+      console.error(
+        "PA SPEECH ERROR:",
+        event.error
+      );
+
+    };
+
+
+  paRecognition.onend = () => {
+
+    paListening = false;
+
+    if (paMicBtn) {
+      paMicBtn.textContent =
+        "🎤";
+    }
+
+  };
+
+}
+
+
+setupPARecognition();
+
+
+// =====================================================
+// MIC BUTTON
+// =====================================================
+
+if (paMicBtn) {
+
+  paMicBtn.addEventListener(
+    "click",
+    () => {
+
+      if (!paRecognition) {
+
+        alert(
+          "Voice input is not supported in this browser."
+        );
+
+        return;
+
+      }
+
+      if (paListening) {
+
+        paRecognition.stop();
+
+      } else {
+
+        paRecognition.start();
+
+      }
+
+    }
+  );
+
+}

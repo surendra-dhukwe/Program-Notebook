@@ -2,13 +2,26 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1.0"
+  >
 
   <title>Program Notebook</title>
 
   <!-- Google Fonts -->
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+
+  <link
+    rel="preconnect"
+    href="https://fonts.googleapis.com"
+  >
+
+  <link
+    rel="preconnect"
+    href="https://fonts.gstatic.com"
+    crossorigin
+  >
 
   <link
     href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&display=swap"
@@ -16,16 +29,23 @@
   >
 
   <!-- Prism -->
+
   <link
     rel="stylesheet"
     href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism-tomorrow.min.css"
   >
 
   <!-- Main CSS -->
-  <link rel="stylesheet" href="style.css">
+
+  <link
+    rel="stylesheet"
+    href="style.css"
+  >
+
 </head>
 
 <body>
+
 
   <!-- =====================================================
        TOAST
@@ -38,25 +58,34 @@
        LOGIN SCREEN
   ====================================================== -->
 
-  <section id="loginScreen" class="login-screen">
+  <section
+    id="loginScreen"
+    class="login-screen"
+  >
 
     <div class="login-glow glow-one"></div>
+
     <div class="login-glow glow-two"></div>
 
+
     <div class="login-card">
+
 
       <div class="brand-mark">
         PN
       </div>
 
+
       <span class="eyebrow">
         YOUR PERSONAL KNOWLEDGE SPACE
       </span>
+
 
       <h1>
         Program<br>
         <span>Notebook</span>
       </h1>
+
 
       <p id="authDescription">
         Save programming questions, answers and code in one clean notebook.
@@ -69,9 +98,11 @@
 
       <div id="userStep">
 
+
         <label for="nameInput">
           Enter your User ID
         </label>
+
 
         <div class="name-box">
 
@@ -87,18 +118,24 @@
 
         </div>
 
+
         <button
           id="startBtn"
           class="primary-btn"
           type="button"
         >
+
           Continue
+
           <span>→</span>
+
         </button>
+
 
         <small>
           Enter your existing User ID or create a new one.
         </small>
+
 
       </div>
 
@@ -107,15 +144,21 @@
            EXISTING USER LOGIN
       ================================================== -->
 
-      <div id="passwordStep" class="hidden">
+      <div
+        id="passwordStep"
+        class="hidden"
+      >
+
 
         <label for="passwordInput">
           Password
         </label>
 
+
         <div class="name-box password-box">
 
           <span>🔐</span>
+
 
           <input
             id="passwordInput"
@@ -124,6 +167,7 @@
             maxlength="100"
             autocomplete="current-password"
           >
+
 
           <button
             id="togglePassword"
@@ -137,14 +181,19 @@
 
         </div>
 
+
         <button
           id="loginBtn"
           class="primary-btn"
           type="button"
         >
+
           Login
+
           <span>→</span>
+
         </button>
+
 
         <button
           id="backToUser"
@@ -154,9 +203,11 @@
           ← Change User ID
         </button>
 
+
         <small id="passwordMessage">
           Enter your password to open your notebook.
         </small>
+
 
       </div>
 
@@ -165,17 +216,23 @@
            CREATE ACCOUNT
       ================================================== -->
 
-      <div id="createStep" class="hidden">
+      <div
+        id="createStep"
+        class="hidden"
+      >
+
 
         <div class="new-user-message">
 
           <span>✦</span>
+
 
           <div>
 
             <strong id="newUserName">
               User
             </strong>
+
 
             <p>
               This User ID is available. Create a password to protect your notebook.
@@ -190,9 +247,11 @@
           Create Password
         </label>
 
+
         <div class="name-box password-box">
 
           <span>🔐</span>
+
 
           <input
             id="createPasswordInput"
@@ -201,6 +260,7 @@
             maxlength="100"
             autocomplete="new-password"
           >
+
 
           <button
             id="toggleCreatePassword"
@@ -219,9 +279,11 @@
           Confirm Password
         </label>
 
+
         <div class="name-box password-box">
 
           <span>✓</span>
+
 
           <input
             id="confirmPasswordInput"
@@ -230,6 +292,7 @@
             maxlength="100"
             autocomplete="new-password"
           >
+
 
           <button
             id="toggleConfirmPassword"
@@ -243,14 +306,19 @@
 
         </div>
 
+
         <button
           id="createBtn"
           class="primary-btn"
           type="button"
         >
+
           Create Notebook
+
           <span>→</span>
+
         </button>
+
 
         <button
           id="backToUserFromCreate"
@@ -260,11 +328,14 @@
           ← Change User ID
         </button>
 
+
         <small>
           Your password will be protected and will not be displayed.
         </small>
 
+
       </div>
+
 
     </div>
 
@@ -275,7 +346,10 @@
        MAIN APPLICATION
   ====================================================== -->
 
-  <div id="app" class="app hidden">
+  <div
+    id="app"
+    class="app hidden"
+  >
 
 
     <!-- ===================================================
@@ -284,16 +358,27 @@
 
     <aside class="sidebar">
 
+
       <div class="sidebar-brand">
+
 
         <div class="brand-mark small">
           PN
         </div>
 
+
         <div>
-          <strong>Program</strong>
-          <span>Notebook</span>
+
+          <strong>
+            Program
+          </strong>
+
+          <span>
+            Notebook
+          </span>
+
         </div>
+
 
       </div>
 
@@ -302,9 +387,14 @@
 
       <div class="profile-mini">
 
-        <div id="avatar" class="avatar">
+
+        <div
+          id="avatar"
+          class="avatar"
+        >
           S
         </div>
+
 
         <div>
 
@@ -312,11 +402,13 @@
             User
           </b>
 
+
           <span>
             My Notebook
           </span>
 
         </div>
+
 
       </div>
 
@@ -325,41 +417,73 @@
 
       <nav class="side-nav">
 
+
         <button
           class="nav-btn active"
           data-page="home"
           type="button"
         >
+
           <span>⌂</span>
+
           Home
+
         </button>
+
 
         <button
           class="nav-btn"
           data-page="notes"
           type="button"
         >
+
           <span>▤</span>
+
           Notes
+
         </button>
+
 
         <button
           class="nav-btn"
           data-page="add"
           type="button"
         >
+
           <span>＋</span>
+
           Add
+
         </button>
+
 
         <button
           class="nav-btn"
           data-page="profile"
           type="button"
         >
+
           <span>◎</span>
+
           Profile
+
         </button>
+
+
+        <!-- PERSONAL ASSISTANT -->
+
+        <button
+          class="nav-btn"
+          data-page="pa"
+          type="button"
+        >
+
+          <span>🤖</span>
+
+          PA Mode
+
+        </button>
+
 
       </nav>
 
@@ -367,6 +491,7 @@
       <!-- SIDEBAR BOTTOM -->
 
       <div class="sidebar-bottom">
+
 
         <div class="tip-box">
 
@@ -378,6 +503,7 @@
 
         </div>
 
+
         <button
           id="logoutBtn"
           class="logout-btn"
@@ -386,7 +512,9 @@
           ↪ Logout
         </button>
 
+
       </div>
+
 
     </aside>
 
@@ -404,11 +532,13 @@
 
       <header class="topbar">
 
+
         <div>
 
           <span class="top-label">
             PERSONAL LEARNING SPACE
           </span>
+
 
           <h2 id="pageTitle">
             Home
@@ -416,7 +546,9 @@
 
         </div>
 
+
         <div class="top-actions">
+
 
           <button
             id="searchBtn"
@@ -427,11 +559,13 @@
             ⌕
           </button>
 
+
           <div class="user-chip">
 
             <span id="topAvatar">
               S
             </span>
+
 
             <b id="topName">
               User
@@ -439,7 +573,9 @@
 
           </div>
 
+
         </div>
+
 
       </header>
 
@@ -472,7 +608,9 @@
         class="page active-page"
       >
 
+
         <div class="hero">
+
 
           <div>
 
@@ -480,19 +618,26 @@
               WELCOME BACK
             </span>
 
+
             <h1>
+
               Welcome
+
               <span id="welcomeName">
                 User
               </span>
+
               👋
+
             </h1>
+
 
             <p>
               Explore your notebook in a random learning sequence.
             </p>
 
           </div>
+
 
           <button
             id="randomBtn"
@@ -502,6 +647,7 @@
             ⤨ Randomize
           </button>
 
+
         </div>
 
 
@@ -509,11 +655,13 @@
 
         <div class="stats-row">
 
+
           <div class="stat-card">
 
             <span>
               SUBJECTS
             </span>
+
 
             <strong id="subjectCount">
               0
@@ -521,11 +669,13 @@
 
           </div>
 
+
           <div class="stat-card">
 
             <span>
               QUESTIONS
             </span>
+
 
             <strong id="questionCount">
               0
@@ -533,17 +683,20 @@
 
           </div>
 
+
           <div class="stat-card">
 
             <span>
               PROFILE
             </span>
 
+
             <strong id="profileLabel">
               —
             </strong>
 
           </div>
+
 
         </div>
 
@@ -552,17 +705,20 @@
 
         <div class="section-heading">
 
+
           <div>
 
             <span class="eyebrow">
               ALL KNOWLEDGE
             </span>
 
+
             <h3>
               Learning Feed
             </h3>
 
           </div>
+
 
           <span
             id="feedCount"
@@ -571,7 +727,9 @@
             0 notes
           </span>
 
+
         </div>
+
 
         <div
           id="randomFeed"
@@ -583,19 +741,24 @@
 
         <div class="thank-you">
 
+
           <div class="thank-icon">
             ✦
           </div>
+
 
           <h2>
             Thank you for visiting my Program Notebook website.
           </h2>
 
+
           <p>
             Keep learning. Keep building. Keep your best answers here.
           </p>
 
+
         </div>
+
 
       </section>
 
@@ -609,34 +772,42 @@
         class="page"
       >
 
+
         <div class="page-intro">
+
 
           <span class="eyebrow">
             ORGANIZED KNOWLEDGE
           </span>
 
+
           <h1>
             Notes
           </h1>
 
+
           <p>
             Select a subject → select a question → open its answer.
           </p>
+
 
         </div>
 
 
         <div class="notes-layout">
 
+
           <div
             id="subjectList"
             class="subject-list"
           ></div>
 
+
           <div
             id="questionArea"
             class="question-area"
           >
+
 
             <div class="empty-state">
 
@@ -644,9 +815,11 @@
                 ←
               </div>
 
+
               <h3>
                 Select a subject
               </h3>
+
 
               <p>
                 Your questions will appear here.
@@ -654,9 +827,12 @@
 
             </div>
 
+
           </div>
 
+
         </div>
+
 
       </section>
 
@@ -670,19 +846,24 @@
         class="page"
       >
 
+
         <div class="page-intro">
+
 
           <span class="eyebrow">
             BUILD YOUR NOTEBOOK
           </span>
 
+
           <h1>
             Add New Note
           </h1>
 
+
           <p>
             Create a new subject or choose an existing one and add a question with its answer.
           </p>
+
 
         </div>
 
@@ -692,6 +873,7 @@
           class="form-card"
         >
 
+
           <div class="form-grid">
 
 
@@ -699,9 +881,11 @@
 
             <div class="field full">
 
+
               <label for="subjectInput">
                 Subject
               </label>
+
 
               <div class="subject-input-wrap">
 
@@ -717,10 +901,12 @@
 
               </div>
 
+
               <small>
                 Existing subject name = add under that subject.
                 New name = new subject.
               </small>
+
 
             </div>
 
@@ -729,9 +915,11 @@
 
             <div class="field full">
 
+
               <label for="questionInput">
                 Question
               </label>
+
 
               <input
                 id="questionInput"
@@ -741,6 +929,7 @@
                 required
               >
 
+
             </div>
 
 
@@ -748,9 +937,11 @@
 
             <div class="field full">
 
+
               <label for="answerInput">
                 Answer
               </label>
+
 
               <textarea
                 id="answerInput"
@@ -759,6 +950,7 @@
                 required
               ></textarea>
 
+
             </div>
 
 
@@ -766,9 +958,11 @@
 
             <div class="field full">
 
+
               <label>
                 Note Visibility
               </label>
+
 
               <div class="visibility-selector">
 
@@ -780,6 +974,7 @@
                   for="privateOption"
                 >
 
+
                   <input
                     id="privateOption"
                     type="radio"
@@ -788,25 +983,33 @@
                     checked
                   >
 
+
                   <div class="visibility-card">
+
 
                     <div class="visibility-icon">
                       🔒
                     </div>
 
+
                     <div class="visibility-content">
+
 
                       <strong>
                         Private
                       </strong>
 
+
                       <span>
                         Only you can see this note.
                       </span>
 
+
                     </div>
 
+
                   </div>
+
 
                 </label>
 
@@ -818,6 +1021,7 @@
                   for="publicOption"
                 >
 
+
                   <input
                     id="publicOption"
                     type="radio"
@@ -825,31 +1029,39 @@
                     value="public"
                   >
 
+
                   <div class="visibility-card">
+
 
                     <div class="visibility-icon">
                       🌎
                     </div>
 
+
                     <div class="visibility-content">
+
 
                       <strong>
                         Public
                       </strong>
 
+
                       <span>
                         Other users can see this note.
                       </span>
 
+
                     </div>
+
 
                   </div>
 
+
                 </label>
+
 
               </div>
 
-              <!-- JS/backend compatibility -->
 
               <input
                 id="visibilityInput"
@@ -857,7 +1069,6 @@
                 value="private"
               >
 
-              <!-- API compatibility -->
 
               <input
                 id="privacyInput"
@@ -865,10 +1076,12 @@
                 value="private"
               >
 
+
               <small>
                 Private notes stay in your notebook.
                 Public notes can appear in the public learning feed.
               </small>
+
 
             </div>
 
@@ -877,37 +1090,82 @@
 
             <div class="field">
 
+
               <div class="form-group">
-  <label for="language">Code Language</label>
 
-  <select id="languageInput">
-    <option value="JavaScript">JavaScript</option>
-    <option value="Python">Python</option>
-    <option value="Java">Java</option>
-    <option value="C">C</option>
-    <option value="C++">C++</option>
-    <option value="C#">C#</option>
-    <option value="HTML">HTML</option>
-    <option value="CSS">CSS</option>
-    <option value="PHP">PHP</option>
-    <option value="SQL">SQL</option>
-    <option value="Other">Other</option>
-  </select>
 
-  <!-- Other Language Input -->
-  <input
-    type="text"
-    id="customLanguage"
-    placeholder="Enter your language name (Example: Kotlin, Dart, R)"
-    style="display: none; margin-top: 10px;"
-  />
-</div>
+                <label for="languageInput">
+                  Code Language
+                </label>
+
+
+                <select id="languageInput">
+
+                  <option value="JavaScript">
+                    JavaScript
+                  </option>
+
+                  <option value="Python">
+                    Python
+                  </option>
+
+                  <option value="Java">
+                    Java
+                  </option>
+
+                  <option value="C">
+                    C
+                  </option>
+
+                  <option value="C++">
+                    C++
+                  </option>
+
+                  <option value="C#">
+                    C#
+                  </option>
+
+                  <option value="HTML">
+                    HTML
+                  </option>
+
+                  <option value="CSS">
+                    CSS
+                  </option>
+
+                  <option value="PHP">
+                    PHP
+                  </option>
+
+                  <option value="SQL">
+                    SQL
+                  </option>
+
+                  <option value="Other">
+                    Other
+                  </option>
+
+                </select>
+
+
+                <input
+                  type="text"
+                  id="customLanguage"
+                  placeholder="Enter your language name (Example: Kotlin, Dart, R)"
+                  style="display: none; margin-top: 10px;"
+                >
+
+
+              </div>
+
+
             </div>
 
 
             <!-- CODE -->
 
             <div class="field full">
+
 
               <label for="codeInput">
 
@@ -919,6 +1177,7 @@
 
               </label>
 
+
               <textarea
                 id="codeInput"
                 rows="9"
@@ -926,11 +1185,14 @@
                 spellcheck="false"
               ></textarea>
 
+
               <small>
                 Code is automatically shown in a separate professional code block.
               </small>
 
+
             </div>
+
 
           </div>
 
@@ -938,6 +1200,7 @@
           <!-- FORM FOOTER -->
 
           <div class="form-footer">
+
 
             <button
               type="button"
@@ -947,18 +1210,25 @@
               Clear
             </button>
 
+
             <button
               type="submit"
               id="saveNoteBtn"
               class="primary-btn"
             >
+
               SAVE NOTE
+
               <span>→</span>
+
             </button>
+
 
           </div>
 
+
         </form>
+
 
       </section>
 
@@ -972,7 +1242,9 @@
         class="page"
       >
 
+
         <div class="profile-card">
+
 
           <div
             id="bigAvatar"
@@ -981,13 +1253,16 @@
             S
           </div>
 
+
           <span class="eyebrow">
             NOTEBOOK PROFILE
           </span>
 
+
           <h1 id="profileName">
             User
           </h1>
+
 
           <p>
             Your notebook is protected with your personal login.
@@ -997,6 +1272,7 @@
           <!-- PROFILE STATS -->
 
           <div class="profile-stats">
+
 
             <div>
 
@@ -1010,6 +1286,7 @@
 
             </div>
 
+
             <div>
 
               <b id="profileQuestions">
@@ -1022,6 +1299,7 @@
 
             </div>
 
+
           </div>
 
 
@@ -1033,9 +1311,223 @@
             Logout
           </button>
 
+
         </div>
 
+
       </section>
+
+
+      <!-- =================================================
+           PERSONAL ASSISTANT MODE
+      ================================================== -->
+
+      <section
+        id="paPage"
+        class="page"
+      >
+
+
+        <div class="page-intro">
+
+
+          <span class="eyebrow">
+            PERSONAL ASSISTANT
+          </span>
+
+
+          <h1>
+            PA Mode 🤖
+          </h1>
+
+
+          <p>
+            Ask anything. Type or speak and your Personal Assistant will answer.
+          </p>
+
+
+        </div>
+
+
+        <div class="pa-container">
+
+
+          <!-- PA HEADER -->
+
+          <div class="pa-header">
+
+
+            <div class="pa-avatar">
+              🤖
+            </div>
+
+
+            <div>
+
+              <strong>
+                Program Notebook PA
+              </strong>
+
+
+              <span>
+                Personal Learning Assistant
+              </span>
+
+            </div>
+
+
+            <div class="pa-status">
+
+              <span></span>
+
+              Online
+
+            </div>
+
+
+          </div>
+
+
+          <!-- PA MESSAGES -->
+
+          <div
+            id="paMessages"
+            class="pa-messages"
+          >
+
+
+            <div class="pa-message assistant">
+
+
+              <div class="pa-message-avatar">
+                🤖
+              </div>
+
+
+              <div class="pa-bubble">
+
+
+                <strong>
+                  PA Assistant
+                </strong>
+
+
+                <p>
+                  Hello! 👋 I'm your Personal Assistant.
+                  You can ask me programming questions,
+                  ask about your notebook, or simply talk to me.
+                </p>
+
+
+              </div>
+
+
+            </div>
+
+
+          </div>
+
+
+          <!-- TYPING -->
+
+          <div
+            id="paTyping"
+            class="pa-typing hidden"
+          >
+            PA is thinking...
+          </div>
+
+
+          <!-- PA CONTROLS -->
+
+          <div class="pa-controls">
+
+
+            <button
+              id="paMicBtn"
+              class="pa-icon-btn"
+              type="button"
+              title="Speak"
+            >
+              🎤
+            </button>
+
+
+            <textarea
+              id="paInput"
+              rows="1"
+              placeholder="Ask your Personal Assistant..."
+            ></textarea>
+
+
+            <button
+              id="paSendBtn"
+              class="primary-btn"
+              type="button"
+            >
+
+              Send
+
+              <span>→</span>
+
+            </button>
+
+
+          </div>
+
+
+          <!-- PA SETTINGS -->
+
+          <div class="pa-settings">
+
+
+            <label class="pa-switch">
+
+
+              <input
+                id="paVoiceToggle"
+                type="checkbox"
+                checked
+              >
+
+
+              <span class="pa-slider"></span>
+
+
+              <span>
+                🔊 Voice Response
+              </span>
+
+
+            </label>
+
+
+            <button
+              id="paStopVoice"
+              class="soft-btn"
+              type="button"
+            >
+              🔇 Stop Voice
+            </button>
+
+
+            <button
+              id="paClearBtn"
+              class="soft-btn"
+              type="button"
+            >
+              Clear Chat
+            </button>
+
+
+          </div>
+
+
+        </div>
+
+
+      </section>
+
 
     </main>
 
@@ -1046,41 +1538,81 @@
 
     <div class="mobile-nav">
 
+
       <button
         class="nav-btn active"
         data-page="home"
         type="button"
       >
+
         <span>⌂</span>
-        <small>Home</small>
+
+        <small>
+          Home
+        </small>
+
       </button>
+
 
       <button
         class="nav-btn"
         data-page="notes"
         type="button"
       >
+
         <span>▤</span>
-        <small>Notes</small>
+
+        <small>
+          Notes
+        </small>
+
       </button>
+
 
       <button
         class="nav-btn"
         data-page="add"
         type="button"
       >
+
         <span>＋</span>
-        <small>Add</small>
+
+        <small>
+          Add
+        </small>
+
       </button>
+
 
       <button
         class="nav-btn"
         data-page="profile"
         type="button"
       >
+
         <span>◎</span>
-        <small>Profile</small>
+
+        <small>
+          Profile
+        </small>
+
       </button>
+
+
+      <button
+        class="nav-btn"
+        data-page="pa"
+        type="button"
+      >
+
+        <span>🤖</span>
+
+        <small>
+          PA Mode
+        </small>
+
+      </button>
+
 
     </div>
 
@@ -1094,7 +1626,9 @@
       class="reader-modal hidden"
     >
 
+
       <div class="reader-box">
+
 
         <button
           id="closeReader"
@@ -1110,7 +1644,9 @@
 
         <div class="reader-head">
 
+
           <div class="reader-top-info">
+
 
             <span
               id="readerNumber"
@@ -1119,12 +1655,14 @@
               Q.01
             </span>
 
+
             <span
               id="readerSubject"
               class="subject-tag"
             >
               Subject
             </span>
+
 
             <span
               id="readerVisibility"
@@ -1133,11 +1671,14 @@
               🔒 Private
             </span>
 
+
           </div>
+
 
           <h2 id="readerQuestion">
             Question
           </h2>
+
 
         </div>
 
@@ -1157,7 +1698,9 @@
           class="reader-code hidden"
         >
 
+
           <div class="code-head">
+
 
             <div>
 
@@ -1165,11 +1708,13 @@
                 CODE
               </span>
 
+
               <small id="readerLanguage">
                 JavaScript
               </small>
 
             </div>
+
 
             <button
               id="copyCode"
@@ -1178,12 +1723,15 @@
               Copy
             </button>
 
+
           </div>
+
 
           <pre><code
             id="readerCode"
             class="language-javascript"
           ></code></pre>
+
 
         </div>
 
@@ -1192,7 +1740,9 @@
 
         <div class="reader-footer">
 
+
           <div class="reader-navigation">
+
 
             <button
               id="prevQuestion"
@@ -1202,12 +1752,14 @@
               ← Previous
             </button>
 
+
             <span
               id="readerProgress"
               class="reader-progress"
             >
               1 / 1
             </span>
+
 
             <button
               id="nextQuestion"
@@ -1217,9 +1769,12 @@
               Next →
             </button>
 
+
           </div>
 
+
           <div class="reader-actions">
+
 
             <button
               id="editNote"
@@ -1229,6 +1784,7 @@
               ✎ Edit
             </button>
 
+
             <button
               id="deleteNote"
               class="delete-btn"
@@ -1237,13 +1793,18 @@
               🗑 Delete
             </button>
 
+
           </div>
+
 
         </div>
 
+
       </div>
 
+
     </div>
+
 
   </div>
 
@@ -1267,61 +1828,78 @@
   ====================================================== -->
 
   <script>
-    document.addEventListener("DOMContentLoaded", () => {
 
-      const privateOption =
-        document.getElementById("privateOption");
+    document.addEventListener(
+      "DOMContentLoaded",
+      () => {
 
-      const publicOption =
-        document.getElementById("publicOption");
+        const privateOption =
+          document.getElementById("privateOption");
 
-      const visibilityInput =
-        document.getElementById("visibilityInput");
+        const publicOption =
+          document.getElementById("publicOption");
 
-      const privacyInput =
-        document.getElementById("privacyInput");
+        const visibilityInput =
+          document.getElementById("visibilityInput");
 
-
-      function syncVisibility() {
-
-        const value =
-          publicOption && publicOption.checked
-            ? "public"
-            : "private";
+        const privacyInput =
+          document.getElementById("privacyInput");
 
 
-        if (visibilityInput) {
-          visibilityInput.value = value;
+        function syncVisibility() {
+
+          const value =
+            publicOption &&
+            publicOption.checked
+              ? "public"
+              : "private";
+
+
+          if (visibilityInput) {
+
+            visibilityInput.value =
+              value;
+
+          }
+
+
+          if (privacyInput) {
+
+            privacyInput.value =
+              value;
+
+          }
+
         }
 
 
-        if (privacyInput) {
-          privacyInput.value = value;
+        if (privateOption) {
+
+          privateOption.addEventListener(
+            "change",
+            syncVisibility
+          );
+
         }
 
+
+        if (publicOption) {
+
+          publicOption.addEventListener(
+            "change",
+            syncVisibility
+          );
+
+        }
+
+
+        syncVisibility();
+
       }
+    );
 
-
-      if (privateOption) {
-        privateOption.addEventListener(
-          "change",
-          syncVisibility
-        );
-      }
-
-
-      if (publicOption) {
-        publicOption.addEventListener(
-          "change",
-          syncVisibility
-        );
-      }
-
-
-      syncVisibility();
-
-    });
   </script>
+
 
 </body>
 </html>

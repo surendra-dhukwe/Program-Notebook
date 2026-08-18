@@ -12,11 +12,22 @@ const cors = require("cors");
 const path = require("path");
 const mongoose = require("mongoose");
 const bcrypt = require("bcryptjs");
+const { GoogleGenAI } = require("@google/genai");
 const jwt = require("jsonwebtoken");
 
 const app = express();
 
 const PORT = process.env.PORT || 5000;
+
+// =====================================================
+// GEMINI AI
+// =====================================================
+
+const gemini = process.env.GEMINI_API_KEY
+  ? new GoogleGenAI({
+      apiKey: process.env.GEMINI_API_KEY,
+    })
+  : null;
 
 const JWT_SECRET =
   process.env.JWT_SECRET ||
@@ -761,6 +772,7 @@ app.get(
 
 app.get(
   "/api/public-notes",
+  requireDatabase,
   async (req, res) => {
     try {
       const notes =
@@ -1324,19 +1336,16 @@ app.delete(
   requireDatabase,
   async (req, res) => {
     try {
-      const id =
-        req.params.id;
+      const id = req.params.id;
 
-      const userName =
-        String(
-          req.query.user || ""
-        ).trim();
+      const userName = String(
+        req.query.user || ""
+      ).trim();
 
       if (!userName) {
         return res.status(400).json({
           success: false,
-          message:
-            "User name is required",
+          message: "User name is required",
         });
       }
 
@@ -1367,17 +1376,258 @@ app.delete(
 
       return res.status(500).json({
         success: false,
-        message:
-          error.message,
+        message: error.message,
       });
     }
   }
 );
 
 // =====================================================
+// PERSONAL ASSISTANT - PA MODE
+// =====================================================
+
+app.post(
+  "/api/assistant",
+  async (req, res) => {
+    try {
+
+      console.log("======================================");
+      console.log("PA REQUEST RECEIVED");
+      console.log("======================================");
+
+      const message = String(
+        req.body?.message || ""
+      ).trim();
+
+      const userName = String(
+        req.body?.userName || ""
+      ).trim();
+
+      console.log("Message:", message);
+      console.log("User:", userName);
+      console.log(
+        "Gemini configured:",
+        !!process.env.GEMINI_API_KEY
+      );
+
+      if (!message) {
+        return res.status(400).json({
+          success: false,
+          message: "Message is required",
+        });
+      }
+
+      // ==============================================
+      // GEMINI API CHECK
+      // ==============================================
+
+      if (!process.env.GEMINI_API_KEY) {
+        console.error(
+          "GEMINI_API_KEY IS MISSING"
+        );
+
+        return res.status(500).json({
+          success: false,
+          message:
+            "GEMINI_API_KEY is not configured on the server.",
+        });
+      }
+
+      if (!gemini) {
+        return res.status(500).json({
+          success: false,
+          message:
+            "Gemini AI could not be initialized.",
+        });
+      }
+
+      // ==============================================
+      // CONNECT DATABASE ONLY IF NEEDED
+      // ==============================================
+
+      let userNotes = [];
+
+      if (userName) {
+
+        const databaseConnected =
+          await connectDatabase();
+
+        if (databaseConnected) {
+
+          try {
+
+            userNotes =
+              await Note.find({
+                userName,
+              })
+                .sort({
+                  createdAt: -1,
+                })
+                .limit(50)
+                .lean();
+
+          } catch (dbError) {
+
+            console.error(
+              "PA NOTE FETCH ERROR:",
+              dbError.message
+            );
+
+            // AI will still work even if notes fail
+            userNotes = [];
+
+          }
+
+        } else {
+
+          console.log(
+            "MongoDB unavailable. Continuing without notes."
+          );
+
+        }
+
+      }
+
+      // ==============================================
+      // NOTEBOOK CONTEXT
+      // ==============================================
+
+      const notebookContext =
+        userNotes.length > 0
+          ? userNotes
+              .map(
+                (note, index) => `
+NOTE ${index + 1}
+
+Subject: ${note.subject}
+
+Question: ${note.question}
+
+Answer: ${note.answer}
+
+Code:
+${note.code || "No code"}
+
+Language: ${note.language || "text"}
+`
+              )
+              .join(
+                "\n--------------------\n"
+              )
+          : "No notebook notes are currently available.";
+
+      // ==============================================
+      // SYSTEM INSTRUCTION
+      // ==============================================
+
+      const systemInstruction = `
+You are PA Mode, the Personal Assistant
+of Program Notebook.
+
+User name: ${userName || "User"}
+
+You are helpful, friendly and intelligent.
+
+Support:
+- Hindi
+- English
+- Hinglish
+
+You can help with:
+- Programming
+- Coding
+- Debugging
+- Learning
+- General knowledge
+- Questions about the user's notebook
+
+If the user asks in Hindi or Hinglish,
+reply in Hindi or Hinglish.
+
+If code is needed, provide proper,
+complete and readable code.
+
+USER'S NOTEBOOK:
+
+${notebookContext}
+`;
+
+      // ==============================================
+      // GEMINI REQUEST
+      // ==============================================
+
+      console.log(
+        "Sending request to Gemini..."
+      );
+
+      const response =
+        await gemini.models.generateContent({
+
+          model: "gemini-3.6-flash",
+          contents: message,
+
+          config: {
+            systemInstruction,
+            temperature: 0.7,
+          },
+
+        });
+
+      console.log(
+        "Gemini response received"
+      );
+
+      const answer =
+        response.text ||
+        "Sorry, I could not generate a response.";
+
+      return res.status(200).json({
+        success: true,
+        answer,
+      });
+
+    } catch (error) {
+
+      console.error(
+        "======================================"
+      );
+
+      console.error(
+        "PA MODE ERROR:"
+      );
+
+      console.error(error);
+
+      console.error(
+        "MESSAGE:",
+        error.message
+      );
+
+      console.error(
+        "======================================"
+      );
+
+      return res.status(500).json({
+        success: false,
+
+        message:
+          error.message ||
+          "Personal Assistant failed",
+
+        error:
+          process.env.NODE_ENV === "production"
+            ? undefined
+            : String(error),
+
+      });
+
+    }
+  }
+);
+
+// =====================================================
 // API 404
-// IMPORTANT
-// Never return index.html for an unknown API route.
+// IMPORTANT: This must come AFTER all API routes
 // =====================================================
 
 app.use(
@@ -1385,12 +1635,12 @@ app.use(
   (req, res) => {
     return res.status(404).json({
       success: false,
-      message:
-        "API route not found",
+      message: "API route not found",
       route: req.originalUrl,
     });
   }
 );
+
 
 // =====================================================
 // FRONTEND FALLBACK
@@ -1408,6 +1658,7 @@ app.use(
   }
 );
 
+
 // =====================================================
 // START SERVER
 // =====================================================
@@ -1416,24 +1667,31 @@ app.listen(
   PORT,
   () => {
     console.log("");
+
     console.log(
       "======================================"
     );
+
     console.log(
       "       PROGRAM NOTEBOOK SERVER"
     );
+
     console.log(
       "======================================"
     );
+
     console.log(
       `Server: http://localhost:${PORT}`
     );
+
     console.log(
       "Status: ONLINE"
     );
+
     console.log(
       "======================================"
     );
+
     console.log("");
   }
 );
