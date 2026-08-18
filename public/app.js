@@ -63,6 +63,13 @@ function showToast(
 // API REQUEST
 // =====================================================
 
+// =====================================================
+// API REQUEST
+// =====================================================
+
+const SERVER_DOWN_MESSAGE =
+  "Server is currently unavailable. Please try again after some time. Thank you.";
+
 async function apiRequest(
   endpoint,
   options = {}
@@ -96,35 +103,105 @@ async function apiRequest(
         headers,
       });
   } catch (error) {
+    console.error(
+      "NETWORK ERROR:",
+      error
+    );
+
     throw new Error(
-      "Cannot connect to server. Make sure server.js is running on port 5000."
+      SERVER_DOWN_MESSAGE
     );
   }
 
-  const text =
-    await response.text();
+  let text = "";
 
-  let data;
+  try {
+    text =
+      await response.text();
+  } catch (error) {
+    console.error(
+      "RESPONSE READ ERROR:",
+      error
+    );
+
+    throw new Error(
+      SERVER_DOWN_MESSAGE
+    );
+  }
+
+  let data = {};
 
   try {
     data =
-      text ? JSON.parse(text) : {};
-  } catch {
+      text
+        ? JSON.parse(text)
+        : {};
+  } catch (error) {
     console.error(
-      "SERVER RETURNED HTML/TEXT:",
+      "SERVER RETURNED INVALID RESPONSE:",
       text
     );
 
     throw new Error(
-      "Server did not return JSON. Check backend API route: " +
-        url
+      SERVER_DOWN_MESSAGE
     );
   }
 
+  // -------------------------------------------------
+  // SERVER / DATABASE UNAVAILABLE
+  // -------------------------------------------------
+
+  if (
+    response.status === 502 ||
+    response.status === 503 ||
+    response.status === 504
+  ) {
+    throw new Error(
+      SERVER_DOWN_MESSAGE
+    );
+  }
+
+  // -------------------------------------------------
+  // MONGODB / SERVER ERROR
+  // NEVER SHOW RAW DATABASE ERROR TO USER
+  // -------------------------------------------------
+
   if (!response.ok) {
+    const serverMessage =
+      String(
+        data?.message || ""
+      ).toLowerCase();
+
+    if (
+      serverMessage.includes(
+        "buffering timed out"
+      ) ||
+      serverMessage.includes(
+        "mongo"
+      ) ||
+      serverMessage.includes(
+        "mongoose"
+      ) ||
+      serverMessage.includes(
+        "database"
+      ) ||
+      serverMessage.includes(
+        "server selection"
+      ) ||
+      serverMessage.includes(
+        "topology"
+      ) ||
+      response.status >= 500
+    ) {
+      throw new Error(
+        SERVER_DOWN_MESSAGE
+      );
+    }
+
+    // Normal user errors
     throw new Error(
       data.message ||
-        `Request failed (${response.status})`
+      `Request failed (${response.status})`
     );
   }
 

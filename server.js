@@ -56,53 +56,108 @@ app.use(
 // MONGODB
 // =====================================================
 
-mongoose
-  .connect(process.env.MONGO_URI)
-  .then(async () => {
-    console.log("======================================");
-    console.log("MongoDB connected successfully");
-    console.log("======================================");
+let mongoConnectionPromise = null;
 
-    // -------------------------------------------------
-    // REMOVE USERS WITHOUT PASSWORD
-    // -------------------------------------------------
+async function connectDatabase() {
+  // Already connected
+  if (
+    mongoose.connection.readyState === 1
+  ) {
+    return true;
+  }
 
+  // Connection is already being attempted
+  if (mongoConnectionPromise) {
     try {
-      const result =
-        await User.deleteMany({
-          $or: [
-            {
-              password: {
-                $exists: false,
-              },
-            },
-            {
-              password: null,
-            },
-            {
-              password: "",
-            },
-          ],
-        });
+      await mongoConnectionPromise;
 
-      if (result.deletedCount > 0) {
-        console.log(
-          `Removed ${result.deletedCount} password-less user(s).`
-        );
-      }
-    } catch (cleanupError) {
-      console.error(
-        "USER CLEANUP ERROR:",
-        cleanupError.message
+      return (
+        mongoose.connection.readyState === 1
       );
+    } catch {
+      mongoConnectionPromise = null;
+
+      return false;
     }
-  })
-  .catch((err) => {
+  }
+
+  try {
+    mongoConnectionPromise =
+      mongoose.connect(
+        process.env.MONGO_URI,
+        {
+          serverSelectionTimeoutMS: 5000,
+          connectTimeoutMS: 5000,
+        }
+      );
+
+    await mongoConnectionPromise;
+
+    console.log(
+      "======================================"
+    );
+
+    console.log(
+      "MongoDB connected successfully"
+    );
+
+    console.log(
+      "======================================"
+    );
+
+    return true;
+  } catch (error) {
     console.error(
       "MongoDB connection error:",
-      err.message
+      error.message
     );
-  });
+
+    return false;
+  } finally {
+    mongoConnectionPromise = null;
+  }
+}
+
+// =====================================================
+// DATABASE AVAILABILITY CHECK
+// =====================================================
+
+const DATABASE_DOWN_MESSAGE =
+  "Server is currently unavailable. Please try again after some time. Thank you.";
+
+async function requireDatabase(
+  req,
+  res,
+  next
+) {
+  try {
+    const connected =
+      await connectDatabase();
+
+    if (!connected) {
+      return res.status(503).json({
+        success: false,
+        serverUnavailable: true,
+        message:
+          DATABASE_DOWN_MESSAGE,
+      });
+    }
+
+    next();
+  } catch (error) {
+    console.error(
+      "DATABASE MIDDLEWARE ERROR:",
+      error.message
+    );
+
+    return res.status(503).json({
+      success: false,
+      serverUnavailable: true,
+      message:
+        DATABASE_DOWN_MESSAGE,
+    });
+  }
+}
 
 // =====================================================
 // USER SCHEMA
@@ -336,11 +391,13 @@ async function checkUser(req, res) {
 
 app.post(
   "/api/auth/check",
+  requireDatabase,
   checkUser
 );
 
 app.post(
   "/api/users/check",
+  requireDatabase,
   checkUser
 );
 
@@ -475,11 +532,13 @@ async function registerUser(req, res) {
 
 app.post(
   "/api/auth/register",
+  requireDatabase,
   registerUser
 );
 
 app.post(
   "/api/users/register",
+  requireDatabase,
   registerUser
 );
 
@@ -622,11 +681,13 @@ async function loginUser(req, res) {
 
 app.post(
   "/api/auth/login",
+  requireDatabase,
   loginUser
 );
 
 app.post(
   "/api/users/login",
+  requireDatabase,
   loginUser
 );
 
@@ -655,6 +716,7 @@ app.post(
 
 app.get(
   "/api/notes",
+  requireDatabase,
   async (req, res) => {
     try {
       const userName =
@@ -740,6 +802,7 @@ app.get(
 
 app.get(
   "/api/visible-notes",
+  requireDatabase,
   async (req, res) => {
     try {
       const userName =
@@ -795,6 +858,7 @@ app.get(
 
 app.get(
   "/api/subjects",
+  requireDatabase,
   async (req, res) => {
     try {
       const userName =
@@ -863,6 +927,7 @@ app.get(
 
 app.get(
   "/api/public-subjects",
+  requireDatabase,
   async (req, res) => {
     try {
       const subjects =
@@ -918,6 +983,7 @@ app.get(
 
 app.post(
   "/api/notes",
+  requireDatabase,
   async (req, res) => {
     try {
       const {
@@ -1047,6 +1113,7 @@ app.post(
 
 app.put(
   "/api/notes/:id",
+  requireDatabase,
   async (req, res) => {
     try {
       const id =
@@ -1163,6 +1230,7 @@ app.put(
 
 app.patch(
   "/api/notes/:id/visibility",
+  requireDatabase,
   async (req, res) => {
     try {
       const id =
@@ -1253,6 +1321,7 @@ app.patch(
 
 app.delete(
   "/api/notes/:id",
+  requireDatabase,
   async (req, res) => {
     try {
       const id =
