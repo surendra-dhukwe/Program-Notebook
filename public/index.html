@@ -877,46 +877,31 @@
 
             <div class="field">
 
-              <label for="languageInput">
-                Code Language
-              </label>
+              <div class="form-group">
+  <label for="language">Code Language</label>
 
-              <select id="languageInput">
+  <select id="languageInput">
+    <option value="JavaScript">JavaScript</option>
+    <option value="Python">Python</option>
+    <option value="Java">Java</option>
+    <option value="C">C</option>
+    <option value="C++">C++</option>
+    <option value="C#">C#</option>
+    <option value="HTML">HTML</option>
+    <option value="CSS">CSS</option>
+    <option value="PHP">PHP</option>
+    <option value="SQL">SQL</option>
+    <option value="Other">Other</option>
+  </select>
 
-                <option value="javascript">
-                  JavaScript
-                </option>
-
-                <option value="python">
-                  Python
-                </option>
-
-                <option value="cpp">
-                  C++
-                </option>
-
-                <option value="java">
-                  Java
-                </option>
-
-                <option value="html">
-                  HTML
-                </option>
-
-                <option value="css">
-                  CSS
-                </option>
-
-                <option value="sql">
-                  SQL
-                </option>
-
-                <option value="text">
-                  Plain Text
-                </option>
-
-              </select>
-
+  <!-- Other Language Input -->
+  <input
+    type="text"
+    id="customLanguage"
+    placeholder="Enter your language name (Example: Kotlin, Dart, R)"
+    style="display: none; margin-top: 10px;"
+  />
+</div>
             </div>
 
 

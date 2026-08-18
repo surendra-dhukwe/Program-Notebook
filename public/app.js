@@ -1685,11 +1685,26 @@ async function saveNote(
         ?.value || ""
     );
 
-  const language =
-    String(
-      $("languageInput")
-        ?.value || "text"
+  let language = String(
+  $("languageInput")?.value || "text"
+).trim();
+
+if (language === "Other") {
+  language = String(
+    $("customLanguage")?.value || ""
+  ).trim();
+
+  if (!language) {
+    showToast(
+      "Please enter the language name",
+      "error"
     );
+
+    $("customLanguage")?.focus();
+
+    return;
+  }
+}
 
   const visibility =
     getSelectedVisibility();
@@ -1826,6 +1841,12 @@ function getSelectedVisibility() {
 function clearNoteForm() {
   $("noteForm")?.reset();
 
+  if ($("customLanguage")) {
+  $("customLanguage").value = "";
+  $("customLanguage").style.display =
+    "none";
+}
+
   if ($("privateOption")) {
     $("privateOption").checked =
       true;
@@ -1911,10 +1932,45 @@ function editCurrentNote() {
       note.code || "";
   }
 
-  if ($("languageInput")) {
+ if ($("languageInput")) {
+  const savedLanguage =
+    note.language || "text";
+
+  const availableLanguages =
+    Array.from(
+      $("languageInput").options
+    ).map(
+      (option) => option.value
+    );
+
+  if (
+    availableLanguages.includes(
+      savedLanguage
+    )
+  ) {
     $("languageInput").value =
-      note.language || "text";
+      savedLanguage;
+
+    if ($("customLanguage")) {
+      $("customLanguage").style.display =
+        "none";
+
+      $("customLanguage").value =
+        "";
+    }
+  } else {
+    $("languageInput").value =
+      "Other";
+
+    if ($("customLanguage")) {
+      $("customLanguage").style.display =
+        "block";
+
+      $("customLanguage").value =
+        savedLanguage;
+    }
   }
+}
 
   if (
     note.visibility ===
@@ -2746,6 +2802,30 @@ document.addEventListener(
         "submit",
         saveNote
       );
+
+      $("languageInput")
+  ?.addEventListener(
+    "change",
+    function () {
+      const customLanguage =
+        $("customLanguage");
+
+      if (!customLanguage) return;
+
+      if (this.value === "Other") {
+        customLanguage.style.display =
+          "block";
+
+        customLanguage.focus();
+      } else {
+        customLanguage.style.display =
+          "none";
+
+        customLanguage.value =
+          "";
+      }
+    }
+  );
 
     $("clearForm")
       ?.addEventListener(
