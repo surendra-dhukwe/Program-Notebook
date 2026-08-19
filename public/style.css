@@ -697,3 +697,69 @@ textarea.assistant-input {
   border-radius: 16px !important;
   box-sizing: border-box !important;
 }
+
+.pa-language-btn {
+  min-width: 45px;
+  height: 45px;
+
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 12px;
+
+  background: rgba(255, 255, 255, 0.08);
+  color: inherit;
+
+  font-weight: 700;
+  font-size: 14px;
+
+  cursor: pointer;
+
+  transition: 0.2s ease;
+}
+
+.pa-language-btn:hover {
+  transform: translateY(-2px);
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.pa-language-btn.english-mode {
+  font-size: 13px;
+}
+
+/* =========================================
+   PA LANGUAGE BUTTON
+========================================= */
+
+.pa-language-btn {
+  min-width: 58px;
+  height: 52px;
+
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 14px;
+
+  background: rgba(255, 255, 255, 0.06);
+
+  color: #ffffff;
+
+  font-size: 14px;
+  font-weight: 800;
+
+  cursor: pointer;
+
+  transition: 0.25s ease;
+}
+
+
+.pa-language-btn:hover {
+  transform: translateY(-2px);
+
+  background: rgba(124, 92, 255, 0.2);
+
+  border-color: rgba(124, 92, 255, 0.8);
+}
+
+
+.pa-language-btn.hindi {
+  background: rgba(124, 92, 255, 0.25);
+
+  border-color: #7c5cff;
+}

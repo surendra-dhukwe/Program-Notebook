@@ -293,6 +293,44 @@ function createToken(user) {
 }
 
 // =====================================================
+// AUTH MIDDLEWARE
+// =====================================================
+
+function requireAuth(req, res, next) {
+  try {
+    const authHeader =
+      req.headers.authorization || "";
+
+    const token =
+      authHeader.startsWith("Bearer ")
+        ? authHeader.slice(7)
+        : null;
+
+    if (!token) {
+      return res.status(401).json({
+        success: false,
+        message: "Authentication required",
+      });
+    }
+
+    const decoded =
+      jwt.verify(
+        token,
+        JWT_SECRET
+      );
+
+    req.user = decoded;
+
+    next();
+  } catch (error) {
+    return res.status(401).json({
+      success: false,
+      message: "Invalid or expired session. Please login again.",
+    });
+  }
+}
+
+// =====================================================
 // API STATUS
 // =====================================================
 
@@ -1388,6 +1426,7 @@ app.delete(
 
 app.post(
   "/api/assistant",
+  requireAuth,
   async (req, res) => {
     try {
 
@@ -1400,8 +1439,8 @@ app.post(
       ).trim();
 
       const userName = String(
-        req.body?.userName || ""
-      ).trim();
+  req.user?.name || ""
+).trim();
 
       console.log("Message:", message);
       console.log("User:", userName);
@@ -1564,6 +1603,7 @@ ${notebookContext}
         await gemini.models.generateContent({
 
           model: "gemini-3.6-flash",
+
           contents: message,
 
           config: {
@@ -1607,12 +1647,33 @@ ${notebookContext}
         "======================================"
       );
 
+      // ==============================================
+      // GEMINI QUOTA / RATE LIMIT ERROR
+      // ==============================================
+
+      if (error.status === 429) {
+
+        return res.status(429).json({
+          success: false,
+
+          quotaExceeded: true,
+
+          message:
+            "AI is currently busy or the free limit has been reached. Please wait for a few seconds and try again.",
+
+        });
+
+      }
+
+      // ==============================================
+      // OTHER ERRORS
+      // ==============================================
+
       return res.status(500).json({
         success: false,
 
         message:
-          error.message ||
-          "Personal Assistant failed",
+          "Personal Assistant failed. Please try again later.",
 
         error:
           process.env.NODE_ENV === "production"

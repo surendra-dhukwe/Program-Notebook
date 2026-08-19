@@ -704,6 +704,83 @@ async function openNotebook() {
   showPage("home");
 }
 
+
+// ==========================================
+// PA LANGUAGE TOGGLE
+// ==========================================
+
+
+// function updatePALanguageUI() {
+
+//   if (!paLanguageBtn) return;
+
+
+//   if (paLanguage === "hi-IN") {
+
+//     paLanguageBtn.textContent = "हिं";
+
+//     paLanguageBtn.classList.add("hindi");
+
+//     paLanguageBtn.title =
+//       "Current: Hindi - Click for English";
+
+
+//     if (paInput) {
+
+//       paInput.placeholder =
+//         "अपने Personal Assistant से पूछें...";
+
+//     }
+
+//   } else {
+
+//     paLanguageBtn.textContent = "EN";
+
+//     paLanguageBtn.classList.remove("hindi");
+
+//     paLanguageBtn.title =
+//       "Current: English - Click for Hindi";
+
+
+//     if (paInput) {
+
+//       paInput.placeholder =
+//         "Ask your Personal Assistant...";
+
+//     }
+
+//   }
+
+// }
+
+
+// if (paLanguageBtn) {
+
+//   paLanguageBtn.addEventListener(
+//     "click",
+//     () => {
+
+//       if (paLanguage === "en-US") {
+
+//         paLanguage = "hi-IN";
+
+//       } else {
+
+//         paLanguage = "en-US";
+
+//       }
+
+
+//       updatePALanguageUI();
+
+//     }
+//   );
+
+// }
+
+
+// updatePALanguageUI();
+
 // =====================================================
 // LOAD ALL DATA
 // =====================================================
@@ -3005,6 +3082,11 @@ const paMicBtn =
 const paMessages =
   document.getElementById("paMessages");
 
+const paLanguageBtn =
+  document.getElementById("paLanguageBtn");
+
+let paLanguage = "hindi";
+
 const paTyping =
   document.getElementById("paTyping");
 
@@ -3364,31 +3446,89 @@ if (paClearBtn) {
 
 }
 
+if (paLanguageBtn) {
+
+  paLanguageBtn.addEventListener(
+    "click",
+    () => {
+
+      if (paLanguage === "hindi") {
+
+        paLanguage =
+          "english";
+
+        paLanguageBtn.textContent =
+          "EN";
+
+        paLanguageBtn.classList.add(
+          "english-mode"
+        );
+
+        paLanguageBtn.title =
+          "English / Hinglish Voice Mode";
+
+        showToast(
+          "English / Hinglish voice mode ON",
+          "success"
+        );
+
+      } else {
+
+        paLanguage =
+          "hindi";
+
+        paLanguageBtn.textContent =
+          "हिं";
+
+        paLanguageBtn.classList.remove(
+          "english-mode"
+        );
+
+        paLanguageBtn.title =
+          "Hindi Voice Mode";
+
+        showToast(
+          "Hindi voice mode ON",
+          "success"
+        );
+
+      }
+
+    }
+  );
+
+}
 
 // =====================================================
 // VOICE INPUT
 // =====================================================
-
 function setupPARecognition() {
 
   const SpeechRecognition =
     window.SpeechRecognition ||
     window.webkitSpeechRecognition;
 
+
   if (!SpeechRecognition) {
 
     if (paMicBtn) {
-      paMicBtn.disabled = true;
+
+      paMicBtn.disabled =
+        true;
+
       paMicBtn.title =
         "Voice input is not supported in this browser";
+
     }
 
     return;
 
   }
 
+
   paRecognition =
     new SpeechRecognition();
+
 
   paRecognition.continuous =
     false;
@@ -3396,21 +3536,29 @@ function setupPARecognition() {
   paRecognition.interimResults =
     false;
 
-  paRecognition.lang =
-    "hi-IN";
 
+  // ==========================================
+  // START
+  // ==========================================
 
   paRecognition.onstart = () => {
 
-    paListening = true;
+    paListening =
+      true;
 
     if (paMicBtn) {
+
       paMicBtn.textContent =
         "🔴";
+
     }
 
   };
 
+
+  // ==========================================
+  // RESULT
+  // ==========================================
 
   paRecognition.onresult =
     event => {
@@ -3420,15 +3568,29 @@ function setupPARecognition() {
           .results[0][0]
           .transcript;
 
+      console.log(
+        "Voice Input:",
+        transcript
+      );
+
+
       if (paInput) {
+
         paInput.value =
           transcript;
+
       }
 
+
+      // Automatically send message
       sendPAMessage();
 
     };
 
+
+  // ==========================================
+  // ERROR
+  // ==========================================
 
   paRecognition.onerror =
     event => {
@@ -3438,22 +3600,41 @@ function setupPARecognition() {
         event.error
       );
 
+      if (
+        event.error !==
+        "aborted"
+      ) {
+
+        showToast(
+          "Voice input error: " +
+          event.error,
+          "error"
+        );
+
+      }
+
     };
 
 
+  // ==========================================
+  // END
+  // ==========================================
+
   paRecognition.onend = () => {
 
-    paListening = false;
+    paListening =
+      false;
 
     if (paMicBtn) {
+
       paMicBtn.textContent =
         "🎤";
+
     }
 
   };
 
 }
-
 
 setupPARecognition();
 
@@ -3478,13 +3659,62 @@ if (paMicBtn) {
 
       }
 
+
       if (paListening) {
 
         paRecognition.stop();
 
-      } else {
+        return;
+
+      }
+
+
+      // ==========================================
+      // HINDI MODE
+      // ==========================================
+
+      if (
+        paLanguage ===
+        "hindi"
+      ) {
+
+        paRecognition.lang =
+          "hi-IN";
+
+        console.log(
+          "Hindi Voice Mode"
+        );
+
+      }
+
+      
+
+      // ==========================================
+      // ENGLISH / HINGLISH MODE
+      // ==========================================
+
+      else {
+
+        paRecognition.lang =
+          "en-IN";
+
+        console.log(
+          "English / Hinglish Voice Mode"
+        );
+
+      }
+
+
+      try {
 
         paRecognition.start();
+
+      } catch (error) {
+
+        console.error(
+          "MIC START ERROR:",
+          error
+        );
 
       }
 
@@ -3492,3 +3722,22 @@ if (paMicBtn) {
   );
 
 }
+
+// paMicBtn.addEventListener(
+//   "click",
+//   () => {
+
+//     const recognition =
+//       new SpeechRecognition();
+
+//     recognition.lang = paLanguage;
+
+//     recognition.interimResults = false;
+
+//     recognition.continuous = false;
+
+
+//     recognition.start();
+
+//   }
+// );
