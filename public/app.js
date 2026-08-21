@@ -3,8 +3,8 @@
 // FRONTEND APPLICATION
 // =====================================================
 
-const API_BASE =
-  "/api";
+const API_BASE = "/api";
+
 
 // =====================================================
 // GLOBAL STATE
@@ -24,3080 +24,3999 @@ let readerIndex = 0;
 
 let editingNoteId = null;
 
+
+// =====================================================
+// PERSONAL ASSISTANT STATE
+// =====================================================
+
+let paConversation = [];
+let paRecognition = null;
+let paListening = false;
+let paLanguage = "hindi";
+
+
 // =====================================================
 // DOM HELPER
 // =====================================================
 
 function $(id) {
-  return document.getElementById(id);
+    return document.getElementById(id);
 }
+
 
 // =====================================================
 // TOAST
 // =====================================================
 
-function showToast(
-  message,
-  type = "normal"
-) {
-  const toast = $("toast");
+function showToast(message, type = "normal") {
 
-  if (!toast) return;
+    const toast = $("toast");
 
-  toast.textContent = message;
+    if (!toast) return;
 
-  toast.className =
-    "show " + type;
+    toast.textContent = message;
 
-  clearTimeout(
-    showToast.timer
-  );
+    toast.className = "show " + type;
 
-  showToast.timer =
-    setTimeout(() => {
-      toast.className = "";
+    clearTimeout(showToast.timer);
+
+    showToast.timer = setTimeout(() => {
+        toast.className = "";
     }, 3000);
 }
 
-// =====================================================
-// API REQUEST
-// =====================================================
 
 // =====================================================
-// API REQUEST
+// SERVER DOWN MESSAGE
 // =====================================================
 
 const SERVER_DOWN_MESSAGE =
-  "Server is currently unavailable. Please try again after some time. Thank you.";
-
-async function apiRequest(
-  endpoint,
-  options = {}
-) {
-  const url =
-    API_BASE + endpoint;
-
-  const headers = {
-    ...(options.headers || {}),
-  };
-
-  if (
-    options.body &&
-    !headers["Content-Type"]
-  ) {
-    headers["Content-Type"] =
-      "application/json";
-  }
-
-  if (authToken) {
-    headers.Authorization =
-      `Bearer ${authToken}`;
-  }
+    "Server is currently unavailable. Please try again after some time. Thank you.";
 
 
-let response;
+// =====================================================
+// API REQUEST
+// =====================================================
 
-try {
-  response = await fetch(url, {
-    ...options,
-    headers,
-  });
-} catch (error) {
-  console.error(
-    "NETWORK ERROR:",
-    error
-  );
+async function apiRequest(endpoint, options = {}) {
 
-  throw new Error(
-    SERVER_DOWN_MESSAGE
-  );
-}
+    const url = API_BASE + endpoint;
 
-  let text = "";
-
-  try {
-    text =
-      await response.text();
-  } catch (error) {
-    console.error(
-      "RESPONSE READ ERROR:",
-      error
-    );
-
-    throw new Error(
-      SERVER_DOWN_MESSAGE
-    );
-  }
-
-  let data = {};
-
-  try {
-    data =
-      text
-        ? JSON.parse(text)
-        : {};
-  } catch (error) {
-    console.error(
-      "SERVER RETURNED INVALID RESPONSE:",
-      text
-    );
-
-    throw new Error(
-      SERVER_DOWN_MESSAGE
-    );
-  }
-
-  // -------------------------------------------------
-  // SERVER / DATABASE UNAVAILABLE
-  // -------------------------------------------------
-
-  if (
-    response.status === 502 ||
-    response.status === 503 ||
-    response.status === 504
-  ) {
-    throw new Error(
-      SERVER_DOWN_MESSAGE
-    );
-  }
-
-  // -------------------------------------------------
-  // MONGODB / SERVER ERROR
-  // NEVER SHOW RAW DATABASE ERROR TO USER
-  // -------------------------------------------------
-
-  if (!response.ok) {
-    const serverMessage =
-      String(
-        data?.message || ""
-      ).toLowerCase();
+    const headers = {
+        ...(options.headers || {})
+    };
 
     if (
-      serverMessage.includes(
-        "buffering timed out"
-      ) ||
-      serverMessage.includes(
-        "mongo"
-      ) ||
-      serverMessage.includes(
-        "mongoose"
-      ) ||
-      serverMessage.includes(
-        "database"
-      ) ||
-      serverMessage.includes(
-        "server selection"
-      ) ||
-      serverMessage.includes(
-        "topology"
-      ) ||
-      response.status >= 500
+        options.body &&
+        !(options.body instanceof FormData) &&
+        !headers["Content-Type"]
     ) {
-      throw new Error(
-        SERVER_DOWN_MESSAGE
-      );
+        headers["Content-Type"] = "application/json";
     }
 
-    // Normal user errors
-    throw new Error(
-      data.message ||
-      `Request failed (${response.status})`
-    );
-  }
+    if (authToken) {
+        headers.Authorization = `Bearer ${authToken}`;
+    }
 
-  return data;
+    let response;
+
+    try {
+
+        response = await fetch(url, {
+            ...options,
+            headers
+        });
+
+    } catch (error) {
+
+        console.error("NETWORK ERROR:", error);
+
+        throw new Error(SERVER_DOWN_MESSAGE);
+    }
+
+
+    let text = "";
+
+    try {
+
+        text = await response.text();
+
+    } catch (error) {
+
+        console.error("RESPONSE READ ERROR:", error);
+
+        throw new Error(SERVER_DOWN_MESSAGE);
+    }
+
+
+    let data = {};
+
+    try {
+
+        data = text ? JSON.parse(text) : {};
+
+    } catch (error) {
+
+        console.error("SERVER RETURNED INVALID RESPONSE:", text);
+
+        if (response.status >= 500) {
+            throw new Error(SERVER_DOWN_MESSAGE);
+        }
+
+        throw new Error("Server returned an invalid response.");
+    }
+
+
+    // =================================================
+    // SERVER UNAVAILABLE
+    // =================================================
+
+    if (
+        response.status === 502 ||
+        response.status === 503 ||
+        response.status === 504
+    ) {
+
+        throw new Error(SERVER_DOWN_MESSAGE);
+    }
+
+
+    // =================================================
+    // ERROR RESPONSE
+    // =================================================
+
+    if (!response.ok) {
+
+        const serverMessage = String(
+            data?.message || ""
+        ).toLowerCase();
+
+
+        const databaseError =
+            serverMessage.includes("buffering timed out") ||
+            serverMessage.includes("mongo") ||
+            serverMessage.includes("mongoose") ||
+            serverMessage.includes("database") ||
+            serverMessage.includes("server selection") ||
+            serverMessage.includes("topology");
+
+
+        if (
+            databaseError ||
+            response.status >= 500
+        ) {
+
+            throw new Error(SERVER_DOWN_MESSAGE);
+        }
+
+
+        throw new Error(
+            data.message ||
+            `Request failed (${response.status})`
+        );
+    }
+
+
+    return data;
 }
+
 
 // =====================================================
 // STORAGE
 // =====================================================
 
-function saveSession(
-  token,
-  user
-) {
-  authToken =
-    token || null;
+function saveSession(token, user) {
 
-  currentUser =
-    user || null;
+    authToken = token || null;
+    currentUser = user || null;
 
-  if (authToken) {
-    localStorage.setItem(
-      "pn_token",
-      authToken
-    );
-  } else {
-    localStorage.removeItem(
-      "pn_token"
-    );
-  }
 
-  if (currentUser) {
-    localStorage.setItem(
-      "pn_user",
-      JSON.stringify(
-        currentUser
-      )
-    );
-  } else {
-    localStorage.removeItem(
-      "pn_user"
-    );
-  }
+    if (authToken) {
+
+        localStorage.setItem(
+            "pn_token",
+            authToken
+        );
+
+        // Compatibility
+        localStorage.setItem(
+            "programNotebookToken",
+            authToken
+        );
+
+    } else {
+
+        localStorage.removeItem("pn_token");
+        localStorage.removeItem("programNotebookToken");
+    }
+
+
+    if (currentUser) {
+
+        localStorage.setItem(
+            "pn_user",
+            JSON.stringify(currentUser)
+        );
+
+        localStorage.setItem(
+            "programNotebookUser",
+            currentUser.name || ""
+        );
+
+        localStorage.setItem(
+            "programNotebookRole",
+            currentUser.role || "user"
+        );
+
+    } else {
+
+        localStorage.removeItem("pn_user");
+        localStorage.removeItem("programNotebookUser");
+        localStorage.removeItem("programNotebookRole");
+    }
 }
+
 
 function loadSession() {
-  authToken =
-    localStorage.getItem(
-      "pn_token"
-    );
 
-  try {
-    currentUser =
-      JSON.parse(
-        localStorage.getItem(
-          "pn_user"
-        ) || "null"
-      );
-  } catch {
-    currentUser = null;
-  }
+    authToken =
+        localStorage.getItem("pn_token") ||
+        localStorage.getItem("programNotebookToken");
+
+
+    try {
+
+        currentUser = JSON.parse(
+            localStorage.getItem("pn_user") || "null"
+        );
+
+    } catch {
+
+        currentUser = null;
+    }
+
+
+    // Old storage compatibility
+
+    if (!currentUser) {
+
+        const oldName =
+            localStorage.getItem("programNotebookUser");
+
+        const oldRole =
+            localStorage.getItem("programNotebookRole") || "user";
+
+        if (oldName) {
+
+            currentUser = {
+                name: oldName,
+                role: oldRole
+            };
+        }
+    }
 }
+
 
 function clearSession() {
-  authToken = null;
-  currentUser = null;
 
-  localStorage.removeItem(
-    "pn_token"
-  );
+    authToken = null;
+    currentUser = null;
 
-  localStorage.removeItem(
-    "pn_user"
-  );
+    localStorage.removeItem("pn_token");
+    localStorage.removeItem("pn_user");
+
+    localStorage.removeItem("programNotebookUser");
+    localStorage.removeItem("programNotebookToken");
+    localStorage.removeItem("programNotebookRole");
 }
+
 
 // =====================================================
 // AUTH SCREEN
 // =====================================================
 
 function showLoginScreen() {
-  $("loginScreen")?.classList.remove(
-    "hidden"
-  );
 
-  $("app")?.classList.add(
-    "hidden"
-  );
+    $("loginScreen")?.classList.remove("hidden");
+
+    $("app")?.classList.add("hidden");
 }
+
 
 function showApp() {
-  $("loginScreen")?.classList.add(
-    "hidden"
-  );
 
-  $("app")?.classList.remove(
-    "hidden"
-  );
+    $("loginScreen")?.classList.add("hidden");
+
+    $("app")?.classList.remove("hidden");
 }
+
+
+// =====================================================
+// USER ROLE
+// =====================================================
+
+function getUserRole() {
+
+    return String(
+        currentUser?.role ||
+        localStorage.getItem("programNotebookRole") ||
+        "user"
+    ).toLowerCase();
+}
+
+
+function isOwner() {
+
+    return getUserRole() === "owner";
+}
+
+
+// =====================================================
+// ADMIN NAV
+// =====================================================
+
+function updateAdminUI() {
+
+    const adminBtn = $("adminNavBtn");
+
+    if (!adminBtn) return;
+
+    if (isOwner()) {
+
+        adminBtn.classList.remove("hidden");
+
+    } else {
+
+        adminBtn.classList.add("hidden");
+    }
+}
+
 
 // =====================================================
 // USER ID CHECK
 // =====================================================
 
 async function startNotebook() {
-  const input =
-    $("nameInput");
 
-  const name =
-    String(
-      input?.value || ""
-    ).trim();
+    const input = $("nameInput");
 
-  if (!name) {
-    showToast(
-      "Please enter your User ID",
-      "error"
-    );
+    const name =
+        String(input?.value || "").trim();
 
-    input?.focus();
 
-    return;
-  }
+    if (!name) {
 
-  const button =
-    $("startBtn");
+        showToast(
+            "Please enter your User ID",
+            "error"
+        );
 
-  if (button) {
-    button.disabled = true;
-    button.innerHTML =
-      "Checking... <span>⏳</span>";
-  }
+        input?.focus();
 
-  try {
-    const data =
-      await apiRequest(
-        "/auth/check",
-        {
-          method: "POST",
-
-          body: JSON.stringify({
-            name,
-          }),
-        }
-      );
-
-    // -------------------------------------------------
-    // EXISTING USER
-    // -------------------------------------------------
-
-    // -------------------------------------------------
-// EXISTING USER
-// -------------------------------------------------
-
-if (
-  data.exists &&
-  data.hasPassword
-) {
-  $("userStep")?.classList.add("hidden");
-
-  $("passwordStep")?.classList.remove("hidden");
-
-  $("createStep")?.classList.add("hidden");
-
-  const passwordInput = $("passwordInput");
-
-  if (passwordInput) {
-    passwordInput.value = "";
-    passwordInput.focus();
-  }
-
-  if ($("authDescription")) {
-    $("authDescription").textContent =
-      `Welcome back, ${name}. Enter your password to continue.`;
-  }
-
-  return;
-}
-
-    // -------------------------------------------------
-    // NEW USER
-    // -------------------------------------------------
-
-    $("userStep")?.classList.add(
-      "hidden"
-    );
-
-    $("passwordStep")?.classList.add(
-      "hidden"
-    );
-
-    $("createStep")?.classList.remove(
-      "hidden"
-    );
-
-    if ($("newUserName")) {
-      $("newUserName").textContent =
-        name;
+        return;
     }
 
-    $("createPasswordInput").value =
-      "";
 
-    $("confirmPasswordInput").value =
-      "";
+    const button = $("startBtn");
 
-    if ($("authDescription")) {
-      $("authDescription").textContent =
-        "Create your personal Program Notebook.";
-    }
 
-    $("createPasswordInput")?.focus();
-  } catch (error) {
-    console.error(
-      "CHECK USER ERROR:",
-      error
-    );
-
-    showToast(
-      error.message,
-      "error"
-    );
-  } finally {
     if (button) {
-      button.disabled = false;
-      button.innerHTML =
-        'Continue <span>→</span>';
+
+        button.disabled = true;
+        button.innerHTML = "Checking... ⏳";
     }
-  }
+
+
+    try {
+
+        const data = await apiRequest(
+            "/auth/check",
+            {
+                method: "POST",
+
+                body: JSON.stringify({
+                    name
+                })
+            }
+        );
+
+
+        // =============================================
+        // EXISTING USER
+        // =============================================
+
+        if (
+            data.exists &&
+            data.hasPassword
+        ) {
+
+            $("userStep")?.classList.add("hidden");
+
+            $("passwordStep")?.classList.remove("hidden");
+
+            $("createStep")?.classList.add("hidden");
+
+
+            const passwordInput =
+                $("passwordInput");
+
+
+            if (passwordInput) {
+
+                passwordInput.value = "";
+
+                passwordInput.focus();
+            }
+
+
+            if ($("authDescription")) {
+
+                $("authDescription").textContent =
+                    `Welcome back, ${name}. Enter your password to continue.`;
+            }
+
+
+            return;
+        }
+
+
+        // =============================================
+        // NEW USER
+        // =============================================
+
+        $("userStep")?.classList.add("hidden");
+
+        $("passwordStep")?.classList.add("hidden");
+
+        $("createStep")?.classList.remove("hidden");
+
+
+        if ($("newUserName")) {
+
+            $("newUserName").textContent = name;
+        }
+
+
+        if ($("createPasswordInput")) {
+
+            $("createPasswordInput").value = "";
+        }
+
+
+        if ($("confirmPasswordInput")) {
+
+            $("confirmPasswordInput").value = "";
+        }
+
+
+        if ($("authDescription")) {
+
+            $("authDescription").textContent =
+                "Create your personal Program Notebook.";
+        }
+
+
+        $("createPasswordInput")?.focus();
+
+    } catch (error) {
+
+        console.error(
+            "CHECK USER ERROR:",
+            error
+        );
+
+        showToast(
+            error.message,
+            "error"
+        );
+
+    } finally {
+
+        if (button) {
+
+            button.disabled = false;
+            button.innerHTML = "Continue →";
+        }
+    }
 }
+
 
 // =====================================================
 // LOGIN
 // =====================================================
 
 async function loginUser() {
-  const name =
-    String(
-      $("nameInput")?.value || ""
-    ).trim();
 
-  const password =
-    String(
-      $("passwordInput")?.value || ""
-    );
+    const name =
+        String(
+            $("nameInput")?.value || ""
+        ).trim();
 
-  if (!name) {
-    showToast(
-      "User ID is required",
-      "error"
-    );
 
-    return;
-  }
+    const password =
+        String(
+            $("passwordInput")?.value || ""
+        );
 
-  if (!password) {
-    showToast(
-      "Password is required",
-      "error"
-    );
 
-    $("passwordInput")?.focus();
+    if (!name) {
 
-    return;
-  }
+        showToast(
+            "User ID is required",
+            "error"
+        );
 
-  const button =
-    $("loginBtn");
-
-  if (button) {
-    button.disabled = true;
-    button.innerHTML =
-      "Logging in... <span>⏳</span>";
-  }
-
-  try {
-    const data =
-      await apiRequest(
-        "/auth/login",
-        {
-          method: "POST",
-
-          body: JSON.stringify({
-            name,
-            password,
-          }),
-        }
-      );
-
-    // -------------------------------------------------
-    // TOKEN + USER
-    // -------------------------------------------------
-
-    const token =
-      data.token ||
-      data.data?.token;
-
-    const user =
-      data.user ||
-      data.data?.user;
-
-    if (
-      !token ||
-      !user
-    ) {
-      console.error(
-        "LOGIN RESPONSE:",
-        data
-      );
-
-      throw new Error(
-        "Server did not return login token/user data."
-      );
+        return;
     }
 
-    saveSession(
-      token,
-      user
-    );
 
-    showToast(
-      "Login successful",
-      "success"
-    );
+    if (!password) {
 
-    await openNotebook();
-  } catch (error) {
-    console.error(
-      "LOGIN ERROR:",
-      error
-    );
+        showToast(
+            "Password is required",
+            "error"
+        );
 
-    showToast(
-      error.message,
-      "error"
-    );
-  } finally {
+        $("passwordInput")?.focus();
+
+        return;
+    }
+
+
+    const button = $("loginBtn");
+
+
     if (button) {
-      button.disabled = false;
-      button.innerHTML =
-        'Login <span>→</span>';
+
+        button.disabled = true;
+        button.innerHTML = "Logging in... ⏳";
     }
-  }
+
+
+    try {
+
+        const data = await apiRequest(
+            "/auth/login",
+            {
+                method: "POST",
+
+                body: JSON.stringify({
+                    name,
+                    password
+                })
+            }
+        );
+
+
+        // =============================================
+        // SUPPORT MULTIPLE RESPONSE FORMATS
+        // =============================================
+
+        const token =
+            data.token ||
+            data.data?.token;
+
+
+        const user =
+            data.user ||
+            data.data?.user;
+
+
+        if (!token || !user) {
+
+            console.error(
+                "LOGIN RESPONSE:",
+                data
+            );
+
+            throw new Error(
+                "Server did not return login token/user data."
+            );
+        }
+
+
+        saveSession(
+            token,
+            user
+        );
+
+
+        updateAdminUI();
+
+
+        showToast(
+            "Login successful",
+            "success"
+        );
+
+
+        // Location request
+        sendUserLocation();
+
+
+        await openNotebook();
+
+    } catch (error) {
+
+        console.error(
+            "LOGIN ERROR:",
+            error
+        );
+
+        showToast(
+            error.message,
+            "error"
+        );
+
+    } finally {
+
+        if (button) {
+
+            button.disabled = false;
+            button.innerHTML = "Login →";
+        }
+    }
 }
+
 
 // =====================================================
 // REGISTER
 // =====================================================
 
 async function createNotebook() {
-  const name =
-    String(
-      $("nameInput")?.value || ""
-    ).trim();
 
-  const password =
-    String(
-      $("createPasswordInput")
-        ?.value || ""
-    );
+    const name =
+        String(
+            $("nameInput")?.value || ""
+        ).trim();
 
-  const confirmPassword =
-    String(
-      $("confirmPasswordInput")
-        ?.value || ""
-    );
 
-  if (!name) {
-    showToast(
-      "User ID is required",
-      "error"
-    );
+    const password =
+        String(
+            $("createPasswordInput")?.value || ""
+        );
 
-    return;
-  }
 
-  if (!password) {
-    showToast(
-      "Create a password",
-      "error"
-    );
+    const confirmPassword =
+        String(
+            $("confirmPasswordInput")?.value || ""
+        );
 
-    return;
-  }
 
-  if (
-    password.length < 4
-  ) {
-    showToast(
-      "Password must be at least 4 characters",
-      "error"
-    );
+    if (!name) {
 
-    return;
-  }
+        showToast(
+            "User ID is required",
+            "error"
+        );
 
-  if (
-    password !==
-    confirmPassword
-  ) {
-    showToast(
-      "Passwords do not match",
-      "error"
-    );
+        return;
+    }
 
-    return;
-  }
 
-  const button =
-    $("createBtn");
+    if (!password) {
 
-  if (button) {
-    button.disabled = true;
-    button.innerHTML =
-      "Creating... <span>⏳</span>";
-  }
+        showToast(
+            "Create a password",
+            "error"
+        );
 
-  try {
-    const data =
-      await apiRequest(
-        "/auth/register",
-        {
-          method: "POST",
+        return;
+    }
 
-          body: JSON.stringify({
-            name,
-            password,
-            confirmPassword,
-          }),
+
+    if (password.length < 4) {
+
+        showToast(
+            "Password must be at least 4 characters",
+            "error"
+        );
+
+        return;
+    }
+
+
+    if (password !== confirmPassword) {
+
+        showToast(
+            "Passwords do not match",
+            "error"
+        );
+
+        return;
+    }
+
+
+    const button = $("createBtn");
+
+
+    if (button) {
+
+        button.disabled = true;
+        button.innerHTML = "Creating... ⏳";
+    }
+
+
+    try {
+
+        const data = await apiRequest(
+            "/auth/register",
+            {
+                method: "POST",
+
+                body: JSON.stringify({
+                    name,
+                    password,
+                    confirmPassword
+                })
+            }
+        );
+
+
+        const token =
+            data.token ||
+            data.data?.token;
+
+
+        const user =
+            data.user ||
+            data.data?.user;
+
+
+        if (!token || !user) {
+
+            throw new Error(
+                "Server did not return account data."
+            );
         }
-      );
 
-    const token =
-      data.token ||
-      data.data?.token;
 
-    const user =
-      data.user ||
-      data.data?.user;
+        saveSession(
+            token,
+            user
+        );
+
+
+        updateAdminUI();
+
+
+        showToast(
+            "Notebook created successfully",
+            "success"
+        );
+
+
+        await openNotebook();
+
+    } catch (error) {
+
+        console.error(
+            "CREATE USER ERROR:",
+            error
+        );
+
+        showToast(
+            error.message,
+            "error"
+        );
+
+    } finally {
+
+        if (button) {
+
+            button.disabled = false;
+            button.innerHTML =
+                "Create Notebook →";
+        }
+    }
+}
+
+
+// =====================================================
+// SEND USER LOCATION
+// =====================================================
+
+function sendUserLocation() {
 
     if (
-      !token ||
-      !user
+        !navigator.geolocation ||
+        !authToken
     ) {
-      throw new Error(
-        "Server did not return account data."
-      );
+
+        return;
     }
 
-    saveSession(
-      token,
-      user
-    );
 
-    showToast(
-      "Notebook created successfully",
-      "success"
-    );
+    navigator.geolocation.getCurrentPosition(
 
-    await openNotebook();
-  } catch (error) {
-    console.error(
-      "CREATE USER ERROR:",
-      error
-    );
+        async (position) => {
 
-    showToast(
-      error.message,
-      "error"
+            try {
+
+                await apiRequest(
+                    "/user/location",
+                    {
+                        method: "POST",
+
+                        body: JSON.stringify({
+                            latitude:
+                                position.coords.latitude,
+
+                            longitude:
+                                position.coords.longitude
+                        })
+                    }
+                );
+
+            } catch (error) {
+
+                console.error(
+                    "LOCATION ERROR:",
+                    error
+                );
+            }
+        },
+
+        (error) => {
+
+            console.log(
+                "Location permission denied."
+            );
+        }
     );
-  } finally {
-    if (button) {
-      button.disabled = false;
-      button.innerHTML =
-        'Create Notebook <span>→</span>';
-    }
-  }
 }
+
 
 // =====================================================
 // OPEN NOTEBOOK
 // =====================================================
 
 async function openNotebook() {
-  if (
-    !currentUser ||
-    !currentUser.name
-  ) {
-    clearSession();
-    showLoginScreen();
-    return;
-  }
 
-  showApp();
+    if (
+        !currentUser ||
+        !currentUser.name
+    ) {
 
-  updateUserUI();
+        clearSession();
 
-  await loadAllData();
+        showLoginScreen();
 
-  showPage("home");
+        return;
+    }
+
+
+    showApp();
+
+    updateUserUI();
+
+    updateAdminUI();
+
+    await loadAllData();
+
+    showPage("home");
 }
 
-
-// ==========================================
-// PA LANGUAGE TOGGLE
-// ==========================================
-
-
-// function updatePALanguageUI() {
-
-//   if (!paLanguageBtn) return;
-
-
-//   if (paLanguage === "hi-IN") {
-
-//     paLanguageBtn.textContent = "हिं";
-
-//     paLanguageBtn.classList.add("hindi");
-
-//     paLanguageBtn.title =
-//       "Current: Hindi - Click for English";
-
-
-//     if (paInput) {
-
-//       paInput.placeholder =
-//         "अपने Personal Assistant से पूछें...";
-
-//     }
-
-//   } else {
-
-//     paLanguageBtn.textContent = "EN";
-
-//     paLanguageBtn.classList.remove("hindi");
-
-//     paLanguageBtn.title =
-//       "Current: English - Click for Hindi";
-
-
-//     if (paInput) {
-
-//       paInput.placeholder =
-//         "Ask your Personal Assistant...";
-
-//     }
-
-//   }
-
-// }
-
-
-// if (paLanguageBtn) {
-
-//   paLanguageBtn.addEventListener(
-//     "click",
-//     () => {
-
-//       if (paLanguage === "en-US") {
-
-//         paLanguage = "hi-IN";
-
-//       } else {
-
-//         paLanguage = "en-US";
-
-//       }
-
-
-//       updatePALanguageUI();
-
-//     }
-//   );
-
-// }
-
-
-// updatePALanguageUI();
 
 // =====================================================
 // LOAD ALL DATA
 // =====================================================
 
 async function loadAllData() {
-  if (
-    !currentUser?.name
-  ) {
-    return;
-  }
 
-  try {
-    const user =
-      encodeURIComponent(
-        currentUser.name
-      );
+    if (!currentUser?.name) {
 
-    const [
-      ownNotesData,
-      visibleNotesData,
-      subjectsData,
-    ] =
-      await Promise.all([
-        apiRequest(
-          `/notes?user=${user}`
-        ),
+        return;
+    }
 
-        apiRequest(
-          `/visible-notes?user=${user}`
-        ),
 
-        apiRequest(
-          `/subjects?user=${user}`
-        ),
-      ]);
+    try {
 
-    myNotes =
-      Array.isArray(
-        ownNotesData
-      )
-        ? ownNotesData
-        : [];
+        const user =
+            encodeURIComponent(
+                currentUser.name
+            );
 
-    visibleNotes =
-      Array.isArray(
-        visibleNotesData
-      )
-        ? visibleNotesData
-        : [];
 
-    subjects =
-      Array.isArray(
-        subjectsData
-      )
-        ? subjectsData
-        : [];
+        const [
+            ownNotesData,
+            visibleNotesData,
+            subjectsData
+        ] = await Promise.all([
 
-    // -------------------------------------------------
-    // IMPORTANT:
-    // PUBLIC NOTES FROM ALL USERS ARE INCLUDED HERE.
-    // -------------------------------------------------
+            apiRequest(
+                `/notes?user=${user}`
+            ),
 
-    renderHome();
+            apiRequest(
+                `/visible-notes?user=${user}`
+            ),
 
-    renderSubjects();
+            apiRequest(
+                `/subjects?user=${user}`
+            )
+        ]);
 
-    updateStats();
 
-    updateSubjectOptions();
+        myNotes =
+            Array.isArray(
+                ownNotesData
+            )
+                ? ownNotesData
+                : [];
 
-    renderProfile();
-  } catch (error) {
-    console.error(
-      "LOAD DATA ERROR:",
-      error
-    );
 
-    showToast(
-      error.message,
-      "error"
-    );
-  }
+        visibleNotes =
+            Array.isArray(
+                visibleNotesData
+            )
+                ? visibleNotesData
+                : [];
+
+
+        subjects =
+            Array.isArray(
+                subjectsData
+            )
+                ? subjectsData
+                : [];
+
+
+        renderHome();
+
+        renderSubjects();
+
+        updateStats();
+
+        updateSubjectOptions();
+
+        renderProfile();
+
+    } catch (error) {
+
+        console.error(
+            "LOAD DATA ERROR:",
+            error
+        );
+
+        showToast(
+            error.message,
+            "error"
+        );
+    }
 }
+
 
 // =====================================================
 // USER UI
 // =====================================================
 
-function getInitial(
-  name
-) {
-  return (
-    String(
-      name || "U"
-    )
-      .trim()
-      .charAt(0)
-      .toUpperCase() || "U"
-  );
+function getInitial(name) {
+
+    return (
+        String(name || "U")
+            .trim()
+            .charAt(0)
+            .toUpperCase()
+        || "U"
+    );
 }
+
 
 function updateUserUI() {
-  const name =
-    currentUser?.name ||
-    "User";
 
-  const initial =
-    getInitial(name);
+    const name =
+        currentUser?.name || "User";
 
-  const ids = [
-    "sideName",
-    "topName",
-    "welcomeName",
-    "profileName",
-  ];
 
-  ids.forEach(
-    (id) => {
-      const el = $(id);
+    const initial =
+        getInitial(name);
 
-      if (el) {
-        el.textContent =
-          name;
-      }
+
+    const ids = [
+        "sideName",
+        "topName",
+        "welcomeName",
+        "profileName"
+    ];
+
+
+    ids.forEach(id => {
+
+        const el = $(id);
+
+        if (el) {
+
+            el.textContent = name;
+        }
+    });
+
+
+    [
+        "avatar",
+        "topAvatar",
+        "bigAvatar"
+    ].forEach(id => {
+
+        const el = $(id);
+
+        if (el) {
+
+            el.textContent = initial;
+        }
+    });
+
+
+    if ($("profileLabel")) {
+
+        $("profileLabel").textContent =
+            isOwner()
+                ? "Owner"
+                : "Active";
     }
-  );
-
-  [
-    "avatar",
-    "topAvatar",
-    "bigAvatar",
-  ].forEach(
-    (id) => {
-      const el = $(id);
-
-      if (el) {
-        el.textContent =
-          initial;
-      }
-    }
-  );
-
-  if ($("profileLabel")) {
-    $("profileLabel").textContent =
-      "Active";
-  }
 }
+
 
 // =====================================================
 // STATS
 // =====================================================
 
 function updateStats() {
-  const uniqueSubjects =
-    new Set(
-      myNotes.map(
-        (note) =>
-          note.subject
-      )
-    );
 
-  if ($("subjectCount")) {
-    $("subjectCount").textContent =
-      uniqueSubjects.size;
-  }
+    const uniqueSubjects =
+        new Set(
+            myNotes.map(
+                note => note.subject
+            )
+        );
 
-  if ($("questionCount")) {
-    $("questionCount").textContent =
-      myNotes.length;
-  }
 
-  if ($("profileSubjects")) {
-    $("profileSubjects").textContent =
-      uniqueSubjects.size;
-  }
+    if ($("subjectCount")) {
 
-  if ($("profileQuestions")) {
-    $("profileQuestions").textContent =
-      myNotes.length;
-  }
+        $("subjectCount").textContent =
+            uniqueSubjects.size;
+    }
+
+
+    if ($("questionCount")) {
+
+        $("questionCount").textContent =
+            myNotes.length;
+    }
+
+
+    if ($("profileSubjects")) {
+
+        $("profileSubjects").textContent =
+            uniqueSubjects.size;
+    }
+
+
+    if ($("profileQuestions")) {
+
+        $("profileQuestions").textContent =
+            myNotes.length;
+    }
 }
+
 
 // =====================================================
 // HOME
 // =====================================================
 
-function renderHome(
-  random = false
-) {
-  let notes =
-    [...visibleNotes];
+function renderHome(random = false) {
 
-  if (random) {
-    notes.sort(
-      () =>
-        Math.random() -
-        0.5
-    );
-  }
+    let notes =
+        [...visibleNotes];
 
-  const feed =
-    $("randomFeed");
 
-  if (!feed) return;
+    if (random) {
 
-  if (!notes.length) {
-    feed.innerHTML = `
-      <div class="empty-state">
-        <div>✦</div>
-        <h3>No notes yet</h3>
-        <p>
-          Add your first note to start your notebook.
-        </p>
-      </div>
-    `;
-
-    if ($("feedCount")) {
-      $("feedCount").textContent =
-        "0 notes";
+        notes.sort(
+            () => Math.random() - 0.5
+        );
     }
 
-    return;
-  }
 
-  if ($("feedCount")) {
-    $("feedCount").textContent =
-      `${notes.length} notes`;
-  }
+    const feed = $("randomFeed");
 
-  feed.innerHTML =
-    notes
-      .map(
-        (note, index) =>
-          createFeedCard(
-            note,
-            index
-          )
-      )
-      .join("");
+    if (!feed) return;
 
-  feed
-    .querySelectorAll(
-      "[data-open-note]"
-    )
-    .forEach(
-      (button) => {
-        button.addEventListener(
-          "click",
-          () => {
-            const id =
-              button.dataset
-                .openNote;
 
-            openReaderById(
-              id,
-              notes
+    if (!notes.length) {
+
+        feed.innerHTML = `
+            <div class="empty-state">
+                <div>✦</div>
+                <h3>No notes yet</h3>
+                <p>
+                    Add your first note to start your notebook.
+                </p>
+            </div>
+        `;
+
+
+        if ($("feedCount")) {
+
+            $("feedCount").textContent =
+                "0 notes";
+        }
+
+
+        return;
+    }
+
+
+    if ($("feedCount")) {
+
+        $("feedCount").textContent =
+            `${notes.length} notes`;
+    }
+
+
+    feed.innerHTML =
+        notes
+            .map(
+                (note, index) =>
+                    createFeedCard(
+                        note,
+                        index
+                    )
+            )
+            .join("");
+
+
+    feed
+        .querySelectorAll(
+            "[data-open-note]"
+        )
+        .forEach(button => {
+
+            button.addEventListener(
+                "click",
+                () => {
+
+                    openReaderById(
+                        button.dataset.openNote,
+                        notes
+                    );
+                }
             );
-          }
-        );
-      }
-    );
+        });
 }
+
 
 // =====================================================
 // FEED CARD
 // =====================================================
 
 function createFeedCard(
-  note,
-  index
+    note,
+    index
 ) {
-  const isOwner =
-    note.userName ===
-    currentUser?.name;
 
-  const isPublic =
-    note.visibility ===
-    "public";
+    const isOwner =
+        note.userName ===
+        currentUser?.name;
 
-  const visibilityHTML =
-    isPublic
-      ? `<span class="visibility-badge public">🌎 Public</span>`
-      : `<span class="visibility-badge private">🔒 Private</span>`;
 
-  const ownerHTML =
-    isPublic
-      ? `<span class="note-owner">by ${escapeHTML(note.userName || "User")}</span>`
-      : `<span class="note-owner">your note</span>`;
+    const isPublic =
+        note.visibility === "public";
 
-  const codePreview =
-    note.code
-      ? `
-        <div class="feed-code-preview">
-          <span>CODE</span>
-          <small>${escapeHTML(
-            note.language ||
-              "text"
-          )}</small>
-        </div>
-      `
-      : "";
 
-  return `
-    <article
-      class="feed-card"
-      data-open-note="${escapeHTML(
+    const visibilityHTML =
+        isPublic
+            ? `<span class="visibility-badge public">🌎 Public</span>`
+            : `<span class="visibility-badge private">🔒 Private</span>`;
+
+
+    const ownerHTML =
+        isPublic
+            ? `<span class="note-owner">by ${escapeHTML(note.userName || "User")}</span>`
+            : `<span class="note-owner">your note</span>`;
+
+
+    const codePreview =
+        note.code
+            ? `
+                <div class="feed-code-preview">
+                    <span>CODE</span>
+                    <small>
+                        ${escapeHTML(
+                            note.language || "text"
+                        )}
+                    </small>
+                </div>
+            `
+            : "";
+
+
+    const noteId =
         String(
-          note._id ||
+            note._id ||
             note.id ||
             ""
-        )
-      )}"
-    >
+        );
 
-      <div class="feed-card-top">
-        <div>
-          <span class="subject-tag">
-            ${escapeHTML(
-              note.subject ||
-                "General"
-            )}
-          </span>
 
-          ${ownerHTML}
-        </div>
+    return `
+        <article
+            class="feed-card"
+            data-open-note="${escapeHTML(noteId)}"
+        >
 
-        ${visibilityHTML}
-      </div>
+            <div class="feed-card-top">
 
-      <div class="feed-number">
-        Q.${String(
-          index + 1
-        ).padStart(2, "0")}
-      </div>
+                <div>
 
-      <h3>
-        ${escapeHTML(
-          note.question ||
-            "Question"
-        )}
-      </h3>
+                    <span class="subject-tag">
+                        ${escapeHTML(
+                            note.subject || "General"
+                        )}
+                    </span>
 
-      <p>
-        ${escapeHTML(
-          makePreview(
-            note.answer,
-            160
-          )
-        )}
-      </p>
+                    ${ownerHTML}
 
-      ${codePreview}
+                </div>
 
-      <button
-        class="soft-btn"
-        type="button"
-        data-open-note="${escapeHTML(
-          String(
-            note._id ||
-              note.id ||
-              ""
-          )
-        )}"
-      >
-        Open Answer →
-      </button>
+                ${visibilityHTML}
 
-    </article>
-  `;
+            </div>
+
+
+            <div class="feed-number">
+                Q.${String(
+                    index + 1
+                ).padStart(2, "0")}
+            </div>
+
+
+            <h3>
+                ${escapeHTML(
+                    note.question || "Question"
+                )}
+            </h3>
+
+
+            <p>
+                ${escapeHTML(
+                    makePreview(
+                        note.answer,
+                        160
+                    )
+                )}
+            </p>
+
+
+            ${codePreview}
+
+
+            <button
+                class="soft-btn"
+                type="button"
+                data-open-note="${escapeHTML(noteId)}"
+            >
+                Open Answer →
+            </button>
+
+        </article>
+    `;
 }
 
+
 // =====================================================
-// NOTES PAGE
+// SUBJECTS
 // =====================================================
 
 function renderSubjects() {
-  const list =
-    $("subjectList");
 
-  const area =
-    $("questionArea");
+    const list =
+        $("subjectList");
 
-  if (!list || !area) {
-    return;
-  }
 
-  // -------------------------------------------------
-  // SHOW ALL VISIBLE SUBJECTS
-  // PUBLIC SUBJECTS FROM OTHER USERS ALSO APPEAR.
-  // -------------------------------------------------
+    const area =
+        $("questionArea");
 
-  const subjectMap =
-    new Map();
 
-  visibleNotes.forEach(
-    (note) => {
-      const subject =
-        String(
-          note.subject ||
-            "General"
-        ).trim();
+    if (!list || !area) {
 
-      if (
-        !subjectMap.has(
-          subject
-        )
-      ) {
-        subjectMap.set(
-          subject,
-          0
-        );
-      }
-
-      subjectMap.set(
-        subject,
-        subjectMap.get(
-          subject
-        ) + 1
-      );
+        return;
     }
-  );
 
-  const sorted =
-    [...subjectMap.entries()]
-      .sort((a, b) =>
-        a[0].localeCompare(
-          b[0]
-        )
-      );
 
-  if (!sorted.length) {
-    list.innerHTML = `
-      <div class="empty-state">
-        <div>✦</div>
-        <h3>No subjects</h3>
-        <p>Add a note first.</p>
-      </div>
-    `;
+    const subjectMap =
+        new Map();
 
-    area.innerHTML = `
-      <div class="empty-state">
-        <div>←</div>
-        <h3>No notes available</h3>
-        <p>Your notes will appear here.</p>
-      </div>
-    `;
 
-    return;
-  }
+    visibleNotes.forEach(note => {
 
-  list.innerHTML =
-    sorted
-      .map(
-        ([name, count]) => `
-          <button
-            class="subject-item"
-            type="button"
-            data-subject="${escapeHTML(
-              name
-            )}"
-          >
-            <span>
-              ${escapeHTML(
-                name
-              )}
-            </span>
+        const subject =
+            String(
+                note.subject ||
+                "General"
+            ).trim();
 
-            <b>
-              ${count}
-            </b>
-          </button>
-        `
-      )
-      .join("");
 
-  list
-    .querySelectorAll(
-      "[data-subject]"
-    )
-    .forEach(
-      (button) => {
-        button.addEventListener(
-          "click",
-          () => {
-            list
-              .querySelectorAll(
-                ".subject-item"
-              )
-              .forEach(
-                (item) =>
-                  item.classList.remove(
-                    "active"
-                  )
-              );
+        if (!subjectMap.has(subject)) {
 
-            button.classList.add(
-              "active"
+            subjectMap.set(
+                subject,
+                0
             );
+        }
 
-            renderQuestions(
-              button.dataset
-                .subject
-            );
-          }
+
+        subjectMap.set(
+            subject,
+            subjectMap.get(subject) + 1
         );
-      }
-    );
+    });
+
+
+    const sorted =
+        [...subjectMap.entries()]
+            .sort(
+                (a, b) =>
+                    a[0].localeCompare(b[0])
+            );
+
+
+    if (!sorted.length) {
+
+        list.innerHTML = `
+            <div class="empty-state">
+                <div>✦</div>
+                <h3>No subjects</h3>
+                <p>Add a note first.</p>
+            </div>
+        `;
+
+
+        area.innerHTML = `
+            <div class="empty-state">
+                <div>←</div>
+                <h3>No notes available</h3>
+                <p>Your notes will appear here.</p>
+            </div>
+        `;
+
+
+        return;
+    }
+
+
+    list.innerHTML =
+        sorted
+            .map(
+                ([name, count]) => `
+                    <button
+                        type="button"
+                        class="subject-item"
+                        data-subject="${escapeHTML(name)}"
+                    >
+                        <span>
+                            ${escapeHTML(name)}
+                        </span>
+
+                        <b>
+                            ${count}
+                        </b>
+                    </button>
+                `
+            )
+            .join("");
+
+
+    list
+        .querySelectorAll(
+            "[data-subject]"
+        )
+        .forEach(button => {
+
+            button.addEventListener(
+                "click",
+                () => {
+
+                    list
+                        .querySelectorAll(
+                            ".subject-item"
+                        )
+                        .forEach(item =>
+                            item.classList.remove(
+                                "active"
+                            )
+                        );
+
+
+                    button.classList.add(
+                        "active"
+                    );
+
+
+                    renderQuestions(
+                        button.dataset.subject
+                    );
+                }
+            );
+        });
 }
+
 
 // =====================================================
 // QUESTIONS
 // =====================================================
 
-function renderQuestions(
-  subject
-) {
-  const area =
-    $("questionArea");
+function renderQuestions(subject) {
 
-  if (!area) return;
+    const area =
+        $("questionArea");
 
-  const notes =
-    visibleNotes.filter(
-      (note) =>
-        String(
-          note.subject
-        ) ===
-        String(subject)
-    );
 
-  if (!notes.length) {
+    if (!area) return;
+
+
+    const notes =
+        visibleNotes.filter(
+            note =>
+                String(note.subject) ===
+                String(subject)
+        );
+
+
+    if (!notes.length) {
+
+        area.innerHTML = `
+            <div class="empty-state">
+                <h3>No questions</h3>
+            </div>
+        `;
+
+        return;
+    }
+
+
     area.innerHTML = `
-      <div class="empty-state">
-        <h3>No questions</h3>
-      </div>
-    `;
 
-    return;
-  }
+        <div class="section-heading">
 
-  area.innerHTML = `
-    <div class="question-list">
+            <div>
 
-      <div class="section-heading">
-        <div>
-          <span class="eyebrow">
-            SUBJECT
-          </span>
-
-          <h3>
-            ${escapeHTML(
-              subject
-            )}
-          </h3>
-        </div>
-
-        <span class="count-pill">
-          ${notes.length} questions
-        </span>
-      </div>
-
-      ${notes
-        .map(
-          (note, index) => {
-            const publicClass =
-              note.visibility ===
-              "public"
-                ? "public"
-                : "private";
-
-            const owner =
-              note.visibility ===
-              "public"
-                ? ` · ${escapeHTML(
-                    note.userName ||
-                      "User"
-                  )}`
-                : "";
-
-            return `
-              <button
-                type="button"
-                class="question-item"
-                data-question-id="${escapeHTML(
-  String(
-    note._id || note.id || ""
-  )
-)}"
-              >
-
-                <span class="question-number">
-                  Q.${String(
-                    index + 1
-                  ).padStart(
-                    2,
-                    "0"
-                  )}
+                <span class="eyebrow">
+                    SUBJECT
                 </span>
 
-                <div>
-                  <strong>
-                    ${escapeHTML(
-                      note.question
-                    )}
-                  </strong>
+                <h3>
+                    ${escapeHTML(subject)}
+                </h3>
 
-                  <small>
-                    <span class="${publicClass}">
-                      ${
-                        note.visibility ===
-                        "public"
-                          ? "🌎 Public"
-                          : "🔒 Private"
-                      }
-                    </span>
+            </div>
 
-                    ${owner}
-                  </small>
-                </div>
+            <span class="count-pill">
+                ${notes.length} questions
+            </span>
 
-                <span>→</span>
+        </div>
 
-              </button>
-            `;
-          }
+
+        <div>
+
+            ${notes
+                .map(
+                    (note, index) => {
+
+                        const publicClass =
+                            note.visibility ===
+                            "public"
+                                ? "public"
+                                : "private";
+
+
+                        const owner =
+                            note.visibility ===
+                            "public"
+                                ? ` · ${escapeHTML(
+                                    note.userName ||
+                                    "User"
+                                )}`
+                                : "";
+
+
+                        const noteId =
+                            String(
+                                note._id ||
+                                note.id ||
+                                ""
+                            );
+
+
+                        return `
+
+                            <button
+                                type="button"
+                                class="question-item"
+                                data-question-id="${escapeHTML(noteId)}"
+                            >
+
+                                <span
+                                    class="question-number"
+                                >
+                                    Q.${String(
+                                        index + 1
+                                    ).padStart(2, "0")}
+                                </span>
+
+
+                                <div>
+
+                                    <strong>
+                                        ${escapeHTML(
+                                            note.question
+                                        )}
+                                    </strong>
+
+
+                                    <small>
+
+                                        <span
+                                            class="${publicClass}"
+                                        >
+                                            ${
+                                                note.visibility ===
+                                                "public"
+                                                    ? "🌎 Public"
+                                                    : "🔒 Private"
+                                            }
+                                        </span>
+
+                                        ${owner}
+
+                                    </small>
+
+                                </div>
+
+
+                                <span>
+                                    →
+                                </span>
+
+                            </button>
+
+                        `;
+                    }
+                )
+                .join("")}
+
+        </div>
+    `;
+
+
+    area
+        .querySelectorAll(
+            "[data-question-id]"
         )
-        .join("")}
+        .forEach(button => {
 
-    </div>
-  `;
+            button.addEventListener(
+                "click",
+                () => {
 
-  area
-    .querySelectorAll(
-      "[data-question-id]"
-    )
-    .forEach(
-      (button) => {
-        button.addEventListener(
-          "click",
-          () => {
-            openReaderById(
-              button.dataset
-                .questionId,
-              notes
+                    openReaderById(
+                        button.dataset.questionId,
+                        notes
+                    );
+                }
             );
-          }
-        );
-      }
-    );
+        });
 }
+
 
 // =====================================================
 // READER
 // =====================================================
 
 function openReaderById(
-  id,
-  notes
+    id,
+    notes
 ) {
-  const index =
-  notes.findIndex(
-    (note) =>
-      String(
-        note._id || note.id
-      ) === String(id)
-  );
 
-  if (index < 0) {
-    showToast(
-      "Note not found",
-      "error"
-    );
+    const index =
+        notes.findIndex(
+            note =>
+                String(
+                    note._id ||
+                    note.id
+                ) === String(id)
+        );
 
-    return;
-  }
 
-  readerNotes =
-    [...notes];
+    if (index < 0) {
 
-  readerIndex =
-    index;
+        showToast(
+            "Note not found",
+            "error"
+        );
 
-  renderReader();
+        return;
+    }
 
-  $("readerModal")?.classList.remove(
-    "hidden"
-  );
+
+    readerNotes =
+        [...notes];
+
+
+    readerIndex =
+        index;
+
+
+    renderReader();
+
+
+    $("readerModal")
+        ?.classList
+        .remove("hidden");
 }
+
 
 // =====================================================
 // RENDER READER
 // =====================================================
 
 function renderReader() {
-  const note =
-    readerNotes[
-      readerIndex
-    ];
 
-  if (!note) return;
+    const note =
+        readerNotes[
+            readerIndex
+        ];
 
-  const total =
-    readerNotes.length;
 
-  const question =
-    note.question ||
-    "Question";
+    if (!note) return;
 
-  const answer =
-    note.answer ||
-    "";
 
-  const code =
-    note.code ||
-    "";
+    const total =
+        readerNotes.length;
 
-  const language =
-    note.language ||
-    "text";
 
-  if ($("readerNumber")) {
-    $("readerNumber").textContent =
-      `Q.${String(
-        readerIndex + 1
-      ).padStart(2, "0")}`;
-  }
+    const question =
+        note.question ||
+        "Question";
 
-  if ($("readerSubject")) {
-    $("readerSubject").textContent =
-      note.subject ||
-      "Subject";
-  }
 
-  if ($("readerQuestion")) {
-    $("readerQuestion").textContent =
-      question;
-  }
-
-  if ($("readerAnswer")) {
-    $("readerAnswer").innerHTML =
-      formatAnswer(answer);
-  }
-
-  // -------------------------------------------------
-  // VISIBILITY
-  // -------------------------------------------------
-
-  const visibility =
-    $("readerVisibility");
-
-  if (visibility) {
-    if (
-      note.visibility ===
-      "public"
-    ) {
-      visibility.className =
-        "visibility-badge public";
-
-      visibility.textContent =
-        "🌎 Public";
-    } else {
-      visibility.className =
-        "visibility-badge private";
-
-      visibility.textContent =
-        "🔒 Private";
-    }
-  }
-
-  // -------------------------------------------------
-  // CODE
-  // -------------------------------------------------
-
-  const codeWrap =
-    $("readerCodeWrap");
-
-  const codeElement =
-    $("readerCode");
-
-  const languageElement =
-    $("readerLanguage");
-
-  if (code) {
-    codeWrap?.classList.remove(
-      "hidden"
-    );
-
-    if (languageElement) {
-      languageElement.textContent =
-        language;
-    }
-
-    if (codeElement) {
-      codeElement.className =
-        `language-${getPrismLanguage(
-          language
-        )}`;
-
-      codeElement.textContent =
-        code;
-
-      if (
-        window.Prism
-      ) {
-        Prism.highlightElement(
-          codeElement
-        );
-      }
-    }
-  } else {
-    codeWrap?.classList.add(
-      "hidden"
-    );
-
-    if (codeElement) {
-      codeElement.textContent =
+    const answer =
+        note.answer ||
         "";
+
+
+    const code =
+        note.code ||
+        "";
+
+
+    const language =
+        note.language ||
+        "text";
+
+
+    if ($("readerNumber")) {
+
+        $("readerNumber").textContent =
+            `Q.${String(
+                readerIndex + 1
+            ).padStart(2, "0")}`;
     }
-  }
 
-  // -------------------------------------------------
-  // PROGRESS
-  // -------------------------------------------------
 
-  if ($("readerProgress")) {
-    $("readerProgress").textContent =
-      `${readerIndex + 1} / ${total}`;
-  }
+    if ($("readerSubject")) {
 
-  // -------------------------------------------------
-  // NAV BUTTONS
-  // -------------------------------------------------
+        $("readerSubject").textContent =
+            note.subject ||
+            "Subject";
+    }
 
-  if ($("prevQuestion")) {
-    $("prevQuestion").disabled =
-      readerIndex <= 0;
-  }
 
-  if ($("nextQuestion")) {
-    $("nextQuestion").disabled =
-      readerIndex >=
-      total - 1;
-  }
+    if ($("readerQuestion")) {
 
-  // -------------------------------------------------
-  // EDIT / DELETE
-  // -------------------------------------------------
+        $("readerQuestion").textContent =
+            question;
+    }
 
-  const isOwner =
-    note.userName ===
-    currentUser?.name;
 
-  if ($("editNote")) {
-    $("editNote").style.display =
-      isOwner
-        ? ""
-        : "none";
-  }
+    if ($("readerAnswer")) {
 
-  if ($("deleteNote")) {
-    $("deleteNote").style.display =
-      isOwner
-        ? ""
-        : "none";
-  }
+        $("readerAnswer").innerHTML =
+            formatAnswer(answer);
+    }
+
+
+    // =================================================
+    // VISIBILITY
+    // =================================================
+
+    const visibility =
+        $("readerVisibility");
+
+
+    if (visibility) {
+
+        if (
+            note.visibility ===
+            "public"
+        ) {
+
+            visibility.className =
+                "visibility-badge public";
+
+            visibility.textContent =
+                "🌎 Public";
+
+        } else {
+
+            visibility.className =
+                "visibility-badge private";
+
+            visibility.textContent =
+                "🔒 Private";
+        }
+    }
+
+
+    // =================================================
+    // CODE
+    // =================================================
+
+    const codeWrap =
+        $("readerCodeWrap");
+
+
+    const codeElement =
+        $("readerCode");
+
+
+    const languageElement =
+        $("readerLanguage");
+
+
+    if (code) {
+
+        codeWrap?.classList.remove(
+            "hidden"
+        );
+
+
+        if (languageElement) {
+
+            languageElement.textContent =
+                language;
+        }
+
+
+        if (codeElement) {
+
+            codeElement.className =
+                `language-${getPrismLanguage(
+                    language
+                )}`;
+
+
+            codeElement.textContent =
+                code;
+
+
+            if (window.Prism) {
+
+                Prism.highlightElement(
+                    codeElement
+                );
+            }
+        }
+
+    } else {
+
+        codeWrap?.classList.add(
+            "hidden"
+        );
+
+
+        if (codeElement) {
+
+            codeElement.textContent =
+                "";
+        }
+    }
+
+
+    // =================================================
+    // PROGRESS
+    // =================================================
+
+    if ($("readerProgress")) {
+
+        $("readerProgress").textContent =
+            `${readerIndex + 1} / ${total}`;
+    }
+
+
+    // =================================================
+    // NAVIGATION
+    // =================================================
+
+    if ($("prevQuestion")) {
+
+        $("prevQuestion").disabled =
+            readerIndex <= 0;
+    }
+
+
+    if ($("nextQuestion")) {
+
+        $("nextQuestion").disabled =
+            readerIndex >= total - 1;
+    }
+
+
+    // =================================================
+    // EDIT / DELETE
+    // =================================================
+
+    const noteOwner =
+        note.userName ===
+        currentUser?.name;
+
+
+    if ($("editNote")) {
+
+        $("editNote").style.display =
+            noteOwner
+                ? ""
+                : "none";
+    }
+
+
+    if ($("deleteNote")) {
+
+        $("deleteNote").style.display =
+            noteOwner
+                ? ""
+                : "none";
+    }
 }
+
 
 // =====================================================
 // CLOSE READER
 // =====================================================
 
 function closeReader() {
-  $("readerModal")?.classList.add(
-    "hidden"
-  );
+
+    $("readerModal")
+        ?.classList
+        .add("hidden");
 }
 
+
 // =====================================================
-// READER NEXT
+// READER NEXT/PREVIOUS
 // =====================================================
 
 function nextQuestion() {
-  if (
-    readerIndex <
-    readerNotes.length - 1
-  ) {
-    readerIndex++;
-    renderReader();
-  }
+
+    if (
+        readerIndex <
+        readerNotes.length - 1
+    ) {
+
+        readerIndex++;
+
+        renderReader();
+    }
 }
 
+
 function previousQuestion() {
-  if (
-    readerIndex > 0
-  ) {
-    readerIndex--;
-    renderReader();
-  }
+
+    if (
+        readerIndex > 0
+    ) {
+
+        readerIndex--;
+
+        renderReader();
+    }
 }
+
 
 // =====================================================
 // COPY CODE
 // =====================================================
 
 async function copyCurrentCode() {
-  const note =
-    readerNotes[
-      readerIndex
-    ];
 
-  if (!note?.code) {
-    showToast(
-      "No code available",
-      "error"
-    );
+    const note =
+        readerNotes[
+            readerIndex
+        ];
 
-    return;
-  }
 
-  try {
-    await navigator.clipboard.writeText(
-      note.code
-    );
+    if (!note?.code) {
 
-    showToast(
-      "Code copied",
-      "success"
-    );
-  } catch {
-    showToast(
-      "Unable to copy code",
-      "error"
-    );
-  }
-}
-
-// =====================================================
-// ADD NOTE
-// =====================================================
-
-async function saveNote(
-  event
-) {
-  event.preventDefault();
-
-  if (
-    !currentUser?.name
-  ) {
-    showToast(
-      "Please login first",
-      "error"
-    );
-
-    return;
-  }
-
-  const subject =
-    String(
-      $("subjectInput")
-        ?.value || ""
-    ).trim();
-
-  const question =
-    String(
-      $("questionInput")
-        ?.value || ""
-    ).trim();
-
-  const answer =
-    String(
-      $("answerInput")
-        ?.value || ""
-    );
-
-  const code =
-    String(
-      $("codeInput")
-        ?.value || ""
-    );
-
-  let language = String(
-  $("languageInput")?.value || "text"
-).trim();
-
-if (language === "Other") {
-  language = String(
-    $("customLanguage")?.value || ""
-  ).trim();
-
-  if (!language) {
-    showToast(
-      "Please enter the language name",
-      "error"
-    );
-
-    $("customLanguage")?.focus();
-
-    return;
-  }
-}
-
-  const visibility =
-    getSelectedVisibility();
-
-  if (
-    !subject ||
-    !question ||
-    !answer.trim()
-  ) {
-    showToast(
-      "Subject, question and answer are required",
-      "error"
-    );
-
-    return;
-  }
-
-  const button =
-    $("saveNoteBtn");
-
-  if (button) {
-    button.disabled = true;
-    button.innerHTML =
-      "SAVING... <span>⏳</span>";
-  }
-
-  try {
-    let result;
-
-    if (editingNoteId) {
-      result =
-        await apiRequest(
-          `/notes/${editingNoteId}`,
-          {
-            method: "PUT",
-
-            body: JSON.stringify({
-              subject,
-              question,
-              answer,
-              code,
-              language,
-              userName:
-                currentUser.name,
-              visibility,
-            }),
-          }
+        showToast(
+            "No code available",
+            "error"
         );
 
-      showToast(
-        "Note updated",
-        "success"
-      );
-    } else {
-      result =
-        await apiRequest(
-          "/notes",
-          {
-            method: "POST",
-
-            body: JSON.stringify({
-              subject,
-              question,
-              answer,
-              code,
-              language,
-              userName:
-                currentUser.name,
-              visibility,
-            }),
-          }
-        );
-
-      showToast(
-        "Note saved",
-        "success"
-      );
+        return;
     }
 
-    editingNoteId = null;
 
-    clearNoteForm();
+    try {
 
-    await loadAllData();
+        await navigator.clipboard.writeText(
+            note.code
+        );
 
-    showPage("notes");
-  } catch (error) {
-    console.error(
-      "SAVE NOTE ERROR:",
-      error
-    );
 
-    showToast(
-      error.message,
-      "error"
-    );
-  } finally {
+        showToast(
+            "Code copied",
+            "success"
+        );
+
+    } catch {
+
+        showToast(
+            "Unable to copy code",
+            "error"
+        );
+    }
+}
+
+
+// =====================================================
+// SAVE / UPDATE NOTE
+// =====================================================
+
+async function saveNote(event) {
+
+    event.preventDefault();
+
+
+    if (!currentUser?.name) {
+
+        showToast(
+            "Please login first",
+            "error"
+        );
+
+        return;
+    }
+
+
+    const subject =
+        String(
+            $("subjectInput")?.value ||
+            ""
+        ).trim();
+
+
+    const question =
+        String(
+            $("questionInput")?.value ||
+            ""
+        ).trim();
+
+
+    const answer =
+        String(
+            $("answerInput")?.value ||
+            ""
+        );
+
+
+    const code =
+        String(
+            $("codeInput")?.value ||
+            ""
+        );
+
+
+    let language =
+        String(
+            $("languageInput")?.value ||
+            "text"
+        ).trim();
+
+
+    if (language === "Other") {
+
+        language =
+            String(
+                $("customLanguage")?.value ||
+                ""
+            ).trim();
+
+
+        if (!language) {
+
+            showToast(
+                "Please enter the language name",
+                "error"
+            );
+
+            $("customLanguage")?.focus();
+
+            return;
+        }
+    }
+
+
+    const visibility =
+        getSelectedVisibility();
+
+
+    if (
+        !subject ||
+        !question ||
+        !answer.trim()
+    ) {
+
+        showToast(
+            "Subject, question and answer are required",
+            "error"
+        );
+
+        return;
+    }
+
+
+    const button =
+        $("saveNoteBtn");
+
+
     if (button) {
-      button.disabled = false;
-      button.innerHTML =
-        'SAVE NOTE <span>→</span>';
+
+        button.disabled = true;
+
+        button.innerHTML =
+            "SAVING... ⏳";
     }
-  }
+
+
+    try {
+
+        const noteData = {
+
+            subject,
+
+            question,
+
+            answer,
+
+            code,
+
+            language,
+
+            userName:
+                currentUser.name,
+
+            visibility
+        };
+
+
+        if (editingNoteId) {
+
+            await apiRequest(
+                `/notes/${editingNoteId}`,
+                {
+                    method: "PUT",
+
+                    body:
+                        JSON.stringify(
+                            noteData
+                        )
+                }
+            );
+
+
+            showToast(
+                "Note updated",
+                "success"
+            );
+
+        } else {
+
+            await apiRequest(
+                "/notes",
+                {
+                    method: "POST",
+
+                    body:
+                        JSON.stringify(
+                            noteData
+                        )
+                }
+            );
+
+
+            showToast(
+                "Note saved",
+                "success"
+            );
+        }
+
+
+        editingNoteId =
+            null;
+
+
+        clearNoteForm();
+
+
+        await loadAllData();
+
+
+        showPage("notes");
+
+    } catch (error) {
+
+        console.error(
+            "SAVE NOTE ERROR:",
+            error
+        );
+
+
+        showToast(
+            error.message,
+            "error"
+        );
+
+    } finally {
+
+        if (button) {
+
+            button.disabled = false;
+
+            button.innerHTML =
+                "SAVE NOTE →";
+        }
+    }
 }
+
 
 // =====================================================
 // VISIBILITY
 // =====================================================
 
 function getSelectedVisibility() {
-  const publicOption =
-    $("publicOption");
 
-  const visibility =
-    publicOption?.checked
-      ? "public"
-      : "private";
+    const publicOption =
+        $("publicOption");
 
-  const hidden =
-    $("visibilityInput");
 
-  if (hidden) {
-    hidden.value =
-      visibility;
-  }
+    const visibility =
+        publicOption?.checked
+            ? "public"
+            : "private";
 
-  return visibility;
+
+    const hidden =
+        $("visibilityInput");
+
+
+    if (hidden) {
+
+        hidden.value =
+            visibility;
+    }
+
+
+    return visibility;
 }
 
+
 // =====================================================
-// CLEAR FORM
+// CLEAR NOTE FORM
 // =====================================================
 
 function clearNoteForm() {
-  $("noteForm")?.reset();
 
-  if ($("customLanguage")) {
-  $("customLanguage").value = "";
-  $("customLanguage").style.display =
-    "none";
+    $("noteForm")?.reset();
+
+
+    if ($("customLanguage")) {
+
+        $("customLanguage").value =
+            "";
+
+        $("customLanguage").style.display =
+            "none";
+    }
+
+
+    if ($("privateOption")) {
+
+        $("privateOption").checked =
+            true;
+    }
+
+
+    if ($("publicOption")) {
+
+        $("publicOption").checked =
+            false;
+    }
+
+
+    if ($("visibilityInput")) {
+
+        $("visibilityInput").value =
+            "private";
+    }
+
+
+    editingNoteId =
+        null;
+
+
+    if ($("saveNoteBtn")) {
+
+        $("saveNoteBtn").innerHTML =
+            "SAVE NOTE →";
+    }
+
+
+    const title =
+        $("addPage")
+            ?.querySelector(
+                ".page-intro h1"
+            );
+
+
+    if (title) {
+
+        title.textContent =
+            "Add New Note";
+    }
 }
 
-  if ($("privateOption")) {
-    $("privateOption").checked =
-      true;
-  }
-
-  if ($("publicOption")) {
-    $("publicOption").checked =
-      false;
-  }
-
-  if ($("visibilityInput")) {
-    $("visibilityInput").value =
-      "private";
-  }
-
-  editingNoteId =
-    null;
-
-  if ($("saveNoteBtn")) {
-    $("saveNoteBtn").innerHTML =
-      'SAVE NOTE <span>→</span>';
-  }
-
-  const title =
-    $("addPage")?.querySelector(
-      ".page-intro h1"
-    );
-
-  if (title) {
-    title.textContent =
-      "Add New Note";
-  }
-}
 
 // =====================================================
 // EDIT NOTE
 // =====================================================
 
 function editCurrentNote() {
-  const note =
-    readerNotes[
-      readerIndex
-    ];
 
-  if (!note) return;
+    const note =
+        readerNotes[
+            readerIndex
+        ];
 
-  if (
-    note.userName !==
-    currentUser?.name
-  ) {
-    showToast(
-      "You can edit only your own notes",
-      "error"
-    );
 
-    return;
-  }
+    if (!note) return;
 
-  editingNoteId =
-    note._id;
 
-  closeReader();
+    if (
+        note.userName !==
+        currentUser?.name
+    ) {
 
-  showPage("add");
+        showToast(
+            "You can edit only your own notes",
+            "error"
+        );
 
-  if ($("subjectInput")) {
-    $("subjectInput").value =
-      note.subject || "";
-  }
-
-  if ($("questionInput")) {
-    $("questionInput").value =
-      note.question || "";
-  }
-
-  if ($("answerInput")) {
-    $("answerInput").value =
-      note.answer || "";
-  }
-
-  if ($("codeInput")) {
-    $("codeInput").value =
-      note.code || "";
-  }
-
- if ($("languageInput")) {
-  const savedLanguage =
-    note.language || "text";
-
-  const availableLanguages =
-    Array.from(
-      $("languageInput").options
-    ).map(
-      (option) => option.value
-    );
-
-  if (
-    availableLanguages.includes(
-      savedLanguage
-    )
-  ) {
-    $("languageInput").value =
-      savedLanguage;
-
-    if ($("customLanguage")) {
-      $("customLanguage").style.display =
-        "none";
-
-      $("customLanguage").value =
-        "";
+        return;
     }
-  } else {
-    $("languageInput").value =
-      "Other";
 
-    if ($("customLanguage")) {
-      $("customLanguage").style.display =
-        "block";
 
-      $("customLanguage").value =
-        savedLanguage;
-    }
-  }
-}
+    editingNoteId =
+        note._id ||
+        note.id;
 
-  if (
-    note.visibility ===
-    "public"
-  ) {
-    $("publicOption").checked =
-      true;
-    $("privateOption").checked =
-      false;
-  } else {
-    $("privateOption").checked =
-      true;
-    $("publicOption").checked =
-      false;
-  }
-
-  getSelectedVisibility();
-
-  const title =
-    $("addPage")?.querySelector(
-      ".page-intro h1"
-    );
-
-  if (title) {
-    title.textContent =
-      "Edit Note";
-  }
-
-  if ($("saveNoteBtn")) {
-    $("saveNoteBtn").innerHTML =
-      'UPDATE NOTE <span>→</span>';
-  }
-}
-
-// =====================================================
-// DELETE
-// =====================================================
-
-async function deleteCurrentNote() {
-  const note =
-    readerNotes[
-      readerIndex
-    ];
-
-  if (!note) return;
-
-  if (
-    note.userName !==
-    currentUser?.name
-  ) {
-    showToast(
-      "You can delete only your own notes",
-      "error"
-    );
-
-    return;
-  }
-
-  const confirmed =
-    window.confirm(
-      "Delete this note permanently?"
-    );
-
-  if (!confirmed) {
-    return;
-  }
-
-  try {
-    await apiRequest(
-      `/notes/${note._id}?user=${encodeURIComponent(
-        currentUser.name
-      )}`,
-      {
-        method: "DELETE",
-      }
-    );
-
-    showToast(
-      "Note deleted",
-      "success"
-    );
 
     closeReader();
 
-    await loadAllData();
-  } catch (error) {
-    console.error(
-      "DELETE NOTE ERROR:",
-      error
-    );
 
-    showToast(
-      error.message,
-      "error"
-    );
-  }
+    showPage("add");
+
+
+    if ($("subjectInput")) {
+
+        $("subjectInput").value =
+            note.subject || "";
+    }
+
+
+    if ($("questionInput")) {
+
+        $("questionInput").value =
+            note.question || "";
+    }
+
+
+    if ($("answerInput")) {
+
+        $("answerInput").value =
+            note.answer || "";
+    }
+
+
+    if ($("codeInput")) {
+
+        $("codeInput").value =
+            note.code || "";
+    }
+
+
+    if ($("languageInput")) {
+
+        const savedLanguage =
+            note.language ||
+            "text";
+
+
+        const availableLanguages =
+            Array.from(
+                $("languageInput").options
+            ).map(
+                option =>
+                    option.value
+            );
+
+
+        if (
+            availableLanguages.includes(
+                savedLanguage
+            )
+        ) {
+
+            $("languageInput").value =
+                savedLanguage;
+
+
+            if ($("customLanguage")) {
+
+                $("customLanguage")
+                    .style
+                    .display =
+                    "none";
+
+                $("customLanguage")
+                    .value =
+                    "";
+            }
+
+        } else {
+
+            $("languageInput").value =
+                "Other";
+
+
+            if ($("customLanguage")) {
+
+                $("customLanguage")
+                    .style
+                    .display =
+                    "block";
+
+                $("customLanguage")
+                    .value =
+                    savedLanguage;
+            }
+        }
+    }
+
+
+    if (
+        note.visibility ===
+        "public"
+    ) {
+
+        $("publicOption").checked =
+            true;
+
+        $("privateOption").checked =
+            false;
+
+    } else {
+
+        $("privateOption").checked =
+            true;
+
+        $("publicOption").checked =
+            false;
+    }
+
+
+    getSelectedVisibility();
+
+
+    const title =
+        $("addPage")
+            ?.querySelector(
+                ".page-intro h1"
+            );
+
+
+    if (title) {
+
+        title.textContent =
+            "Edit Note";
+    }
+
+
+    if ($("saveNoteBtn")) {
+
+        $("saveNoteBtn").innerHTML =
+            "UPDATE NOTE →";
+    }
 }
+
+
+// =====================================================
+// DELETE NOTE
+// =====================================================
+
+async function deleteCurrentNote() {
+
+    const note =
+        readerNotes[
+            readerIndex
+        ];
+
+
+    if (!note) return;
+
+
+    if (
+        note.userName !==
+        currentUser?.name
+    ) {
+
+        showToast(
+            "You can delete only your own notes",
+            "error"
+        );
+
+        return;
+    }
+
+
+    const confirmed =
+        window.confirm(
+            "Delete this note permanently?"
+        );
+
+
+    if (!confirmed) return;
+
+
+    try {
+
+        await apiRequest(
+            `/notes/${note._id}?user=${encodeURIComponent(
+                currentUser.name
+            )}`,
+            {
+                method: "DELETE"
+            }
+        );
+
+
+        showToast(
+            "Note deleted",
+            "success"
+        );
+
+
+        closeReader();
+
+
+        await loadAllData();
+
+    } catch (error) {
+
+        console.error(
+            "DELETE NOTE ERROR:",
+            error
+        );
+
+
+        showToast(
+            error.message,
+            "error"
+        );
+    }
+}
+
 
 // =====================================================
 // SUBJECT OPTIONS
 // =====================================================
 
 function updateSubjectOptions() {
-  const datalist =
-    $("subjectOptions");
 
-  if (!datalist) return;
+    const datalist =
+        $("subjectOptions");
 
-  const names =
-    new Set(
-      subjects.map(
-        (item) =>
-          item.name
-      )
-    );
 
-  // Include visible public subjects too
-  visibleNotes.forEach(
-    (note) => {
-      if (note.subject) {
-        names.add(
-          note.subject
+    if (!datalist) return;
+
+
+    const names =
+        new Set(
+            subjects.map(
+                item =>
+                    item.name
+            )
         );
-      }
-    }
-  );
 
-  datalist.innerHTML =
-    [...names]
-      .sort((a, b) =>
-        String(a).localeCompare(
-          String(b)
-        )
-      )
-      .map(
-        (name) =>
-          `<option value="${escapeHTML(
-            name
-          )}"></option>`
-      )
-      .join("");
+
+    visibleNotes.forEach(note => {
+
+        if (note.subject) {
+
+            names.add(
+                note.subject
+            );
+        }
+    });
+
+
+    datalist.innerHTML =
+        [...names]
+            .sort(
+                (a, b) =>
+                    String(a).localeCompare(
+                        String(b)
+                    )
+            )
+            .map(
+                name =>
+                    `<option value="${escapeHTML(
+                        name
+                    )}"></option>`
+            )
+            .join("");
 }
+
 
 // =====================================================
 // PROFILE
 // =====================================================
 
 function renderProfile() {
-  updateStats();
-  updateUserUI();
+
+    updateStats();
+
+    updateUserUI();
 }
+
 
 // =====================================================
 // SEARCH
 // =====================================================
 
-function performSearch(
-  value
-) {
-  const query =
-    String(
-      value || ""
-    )
-      .trim()
-      .toLowerCase();
+function performSearch(value) {
 
-  if (!query) {
-    renderHome();
-    return;
-  }
-
-  const results =
-    visibleNotes.filter(
-      (note) => {
-        const combined =
-          [
-            note.subject,
-            note.question,
-            note.answer,
-            note.code,
-            note.language,
-            note.userName,
-          ]
-            .join(" ")
+    const query =
+        String(
+            value || ""
+        )
+            .trim()
             .toLowerCase();
 
-        return combined.includes(
-          query
-        );
-      }
-    );
 
-  renderSearchResults(
-    results,
-    query
-  );
+    if (!query) {
+
+        renderHome();
+
+        return;
+    }
+
+
+    const results =
+        visibleNotes.filter(
+            note => {
+
+                const combined = [
+
+                    note.subject,
+
+                    note.question,
+
+                    note.answer,
+
+                    note.code,
+
+                    note.language,
+
+                    note.userName
+
+                ]
+                    .join(" ")
+                    .toLowerCase();
+
+
+                return combined.includes(
+                    query
+                );
+            }
+        );
+
+
+    renderSearchResults(
+        results,
+        query
+    );
 }
+
 
 // =====================================================
 // SEARCH RESULTS
 // =====================================================
 
 function renderSearchResults(
-  results,
-  query
+    results,
+    query
 ) {
-  const feed =
-    $("randomFeed");
 
-  if (!feed) return;
+    const feed =
+        $("randomFeed");
 
-  if (!results.length) {
-    feed.innerHTML = `
-      <div class="empty-state">
-        <div>⌕</div>
-        <h3>No results</h3>
-        <p>
-          Nothing matched "${escapeHTML(
-            query
-          )}".
-        </p>
-      </div>
-    `;
 
-    return;
-  }
+    if (!feed) return;
 
-  feed.innerHTML =
-    results
-      .map(
-        (note, index) =>
-          createFeedCard(
-            note,
-            index
-          )
-      )
-      .join("");
 
-  feed
-    .querySelectorAll(
-      "[data-open-note]"
-    )
-    .forEach(
-      (button) => {
-        button.addEventListener(
-          "click",
-          () => {
-            openReaderById(
-              button.dataset
-                .openNote,
-              results
+    if (!results.length) {
+
+        feed.innerHTML = `
+            <div class="empty-state">
+
+                <div>⌕</div>
+
+                <h3>
+                    No results
+                </h3>
+
+                <p>
+                    Nothing matched "${escapeHTML(
+                        query
+                    )}".
+                </p>
+
+            </div>
+        `;
+
+        return;
+    }
+
+
+    feed.innerHTML =
+        results
+            .map(
+                (note, index) =>
+                    createFeedCard(
+                        note,
+                        index
+                    )
+            )
+            .join("");
+
+
+    feed
+        .querySelectorAll(
+            "[data-open-note]"
+        )
+        .forEach(button => {
+
+            button.addEventListener(
+                "click",
+                () => {
+
+                    openReaderById(
+                        button.dataset.openNote,
+                        results
+                    );
+                }
             );
-          }
-        );
-      }
-    );
+        });
 }
+
 
 // =====================================================
 // PAGE NAVIGATION
 // =====================================================
 
-function showPage(
-  page
-) {
-  currentPage =
-    page;
+function showPage(page) {
 
-  document
-    .querySelectorAll(
-      ".page"
-    )
-    .forEach(
-      (section) => {
-        section.classList.remove(
-          "active-page"
+    currentPage =
+        page;
+
+
+    document
+        .querySelectorAll(".page")
+        .forEach(section => {
+
+            section.classList.remove(
+                "active-page"
+            );
+        });
+
+
+    const target =
+        $(`${page}Page`);
+
+
+    if (target) {
+
+        target.classList.add(
+            "active-page"
         );
-      }
-    );
+    }
 
-  const target =
-    $(`${page}Page`);
 
-  if (target) {
-    target.classList.add(
-      "active-page"
-    );
-  }
+    document
+        .querySelectorAll(".nav-btn")
+        .forEach(button => {
 
-  document
-    .querySelectorAll(
-      ".nav-btn"
-    )
-    .forEach(
-      (button) => {
-        button.classList.toggle(
-          "active",
-          button.dataset
-            .page === page
-        );
-      }
-    );
+            button.classList.toggle(
+                "active",
+                button.dataset.page ===
+                page
+            );
+        });
 
-  const titles = {
-    home: "Home",
-    notes: "Notes",
-    add: "Add",
-    profile: "Profile",
-  };
 
-  if ($("pageTitle")) {
-    $("pageTitle").textContent =
-      titles[page] ||
-      "Home";
-  }
+    const titles = {
 
-  if (
-    page ===
-    "home"
-  ) {
-    renderHome();
-  }
+        home: "Home",
 
-  if (
-    page ===
-    "notes"
-  ) {
-    renderSubjects();
-  }
+        notes: "Notes",
 
-  if (
-    page ===
-    "profile"
-  ) {
-    renderProfile();
-  }
+        add: "Add",
 
-  window.scrollTo({
-    top: 0,
-    behavior: "smooth",
-  });
+        profile: "Profile",
+
+        admin: "Owner Panel"
+    };
+
+
+    if ($("pageTitle")) {
+
+        $("pageTitle").textContent =
+            titles[page] ||
+            "Home";
+    }
+
+
+    if (page === "home") {
+
+        renderHome();
+    }
+
+
+    if (page === "notes") {
+
+        renderSubjects();
+    }
+
+
+    if (page === "profile") {
+
+        renderProfile();
+    }
+
+
+    if (page === "admin") {
+
+        if (!isOwner()) {
+
+            showToast(
+                "Owner access required",
+                "error"
+            );
+
+            showPage("home");
+
+            return;
+        }
+
+
+        loadAdminUsers();
+    }
+
+
+    window.scrollTo({
+        top: 0,
+        behavior: "smooth"
+    });
 }
+
 
 // =====================================================
 // LOGOUT
 // =====================================================
 
 function logout() {
-  clearSession();
 
-  myNotes = [];
-  visibleNotes = [];
-  subjects = [];
+    clearSession();
 
-  showLoginScreen();
 
-  resetAuthUI();
+    myNotes = [];
+    visibleNotes = [];
+    subjects = [];
 
-  showToast(
-    "Logged out",
-    "success"
-  );
+
+    showLoginScreen();
+
+
+    resetAuthUI();
+
+
+    showToast(
+        "Logged out",
+        "success"
+    );
 }
+
+
+// =====================================================
+// RESET AUTH UI
+// =====================================================
 
 function resetAuthUI() {
-  $("userStep")?.classList.remove(
-    "hidden"
-  );
 
-  $("passwordStep")?.classList.add(
-    "hidden"
-  );
+    $("userStep")
+        ?.classList
+        .remove("hidden");
 
-  $("createStep")?.classList.add(
-    "hidden"
-  );
 
-  if ($("passwordInput")) {
-    $("passwordInput").value =
-      "";
-  }
+    $("passwordStep")
+        ?.classList
+        .add("hidden");
 
-  if (
-    $("createPasswordInput")
-  ) {
-    $("createPasswordInput").value =
-      "";
-  }
 
-  if (
-    $("confirmPasswordInput")
-  ) {
-    $("confirmPasswordInput").value =
-      "";
-  }
+    $("createStep")
+        ?.classList
+        .add("hidden");
 
-  if ($("authDescription")) {
-    $("authDescription").textContent =
-      "Save programming questions, answers and code in one clean notebook.";
-  }
+
+    if ($("passwordInput")) {
+
+        $("passwordInput").value =
+            "";
+    }
+
+
+    if ($("createPasswordInput")) {
+
+        $("createPasswordInput").value =
+            "";
+    }
+
+
+    if ($("confirmPasswordInput")) {
+
+        $("confirmPasswordInput").value =
+            "";
+    }
+
+
+    if ($("nameInput")) {
+
+        $("nameInput").value =
+            "";
+    }
+
+
+    if ($("authDescription")) {
+
+        $("authDescription").textContent =
+            "Save programming questions, answers and code in one clean notebook.";
+    }
 }
+
 
 // =====================================================
 // PASSWORD TOGGLE
 // =====================================================
 
 function togglePassword(
-  inputId,
-  buttonId
+    inputId,
+    buttonId
 ) {
-  const input =
-    $(inputId);
 
-  const button =
-    $(buttonId);
+    const input =
+        $(inputId);
 
-  if (!input) return;
 
-  if (
-    input.type ===
-    "password"
-  ) {
-    input.type =
-      "text";
+    const button =
+        $(buttonId);
 
-    if (button) {
-      button.textContent =
-        "🙈";
+
+    if (!input) return;
+
+
+    if (
+        input.type ===
+        "password"
+    ) {
+
+        input.type =
+            "text";
+
+
+        if (button) {
+
+            button.textContent =
+                "🙈";
+        }
+
+    } else {
+
+        input.type =
+            "password";
+
+
+        if (button) {
+
+            button.textContent =
+                "👁";
+        }
     }
-  } else {
-    input.type =
-      "password";
-
-    if (button) {
-      button.textContent =
-        "👁";
-    }
-  }
 }
+
 
 // =====================================================
 // SEARCH PANEL
 // =====================================================
 
 function toggleSearch() {
-  const panel =
-    $("searchPanel");
 
-  if (!panel) return;
+    const panel =
+        $("searchPanel");
 
-  panel.classList.toggle(
-    "hidden"
-  );
 
-  if (
-    !panel.classList.contains(
-      "hidden"
-    )
-  ) {
-    $("searchInput")?.focus();
-  }
+    if (!panel) return;
+
+
+    panel.classList.toggle(
+        "hidden"
+    );
+
+
+    if (
+        !panel.classList.contains(
+            "hidden"
+        )
+    ) {
+
+        $("searchInput")
+            ?.focus();
+    }
 }
+
 
 // =====================================================
 // ANSWER FORMAT
 // =====================================================
 
-function formatAnswer(
-  text
-) {
-  const safe =
-    escapeHTML(
-      String(
-        text || ""
-      )
-    );
+function formatAnswer(text) {
 
-  return safe
-    .replace(
-      /\n/g,
-      "<br>"
+    const safe =
+        escapeHTML(
+            String(text || "")
+        );
+
+
+    return safe.replace(
+        /\n/g,
+        "<br>"
     );
 }
+
 
 // =====================================================
 // PREVIEW
 // =====================================================
 
 function makePreview(
-  text,
-  max
-) {
-  const clean =
-    String(
-      text || ""
-    )
-      .replace(
-        /\s+/g,
-        " "
-      )
-      .trim();
-
-  if (
-    clean.length <=
+    text,
     max
-  ) {
-    return clean;
-  }
+) {
 
-  return (
-    clean.slice(
-      0,
-      max
-    ) + "..."
-  );
+    const clean =
+        String(text || "")
+            .replace(
+                /\s+/g,
+                " "
+            )
+            .trim();
+
+
+    if (
+        clean.length <= max
+    ) {
+
+        return clean;
+    }
+
+
+    return (
+        clean.slice(0, max) +
+        "..."
+    );
 }
+
 
 // =====================================================
 // ESCAPE HTML
 // =====================================================
 
-function escapeHTML(
-  value
-) {
-  return String(
-    value ?? ""
-  )
-    .replace(
-      /&/g,
-      "&amp;"
+function escapeHTML(value) {
+
+    return String(
+        value ?? ""
     )
-    .replace(
-      /</g,
-      "&lt;"
-    )
-    .replace(
-      />/g,
-      "&gt;"
-    )
-    .replace(
-      /"/g,
-      "&quot;"
-    )
-    .replace(
-      /'/g,
-      "&#039;"
-    );
+        .replace(
+            /&/g,
+            "&amp;"
+        )
+        .replace(
+            /</g,
+            "&lt;"
+        )
+        .replace(
+            />/g,
+            "&gt;"
+        )
+        .replace(
+            /"/g,
+            "&quot;"
+        )
+        .replace(
+            /'/g,
+            "&#039;"
+        );
 }
+
+
+// Compatibility alias
+function escapeHtml(value) {
+    return escapeHTML(value);
+}
+
 
 // =====================================================
 // PRISM LANGUAGE
 // =====================================================
 
 function getPrismLanguage(
-  language
+    language
 ) {
-  const map = {
-    javascript:
-      "javascript",
 
-    js:
-      "javascript",
+    const map = {
 
-    python:
-      "python",
+        javascript:
+            "javascript",
 
-    cpp:
-      "cpp",
+        js:
+            "javascript",
 
-    "c++":
-      "cpp",
+        typescript:
+            "typescript",
 
-    java:
-      "java",
+        ts:
+            "typescript",
 
-    html:
-      "markup",
+        python:
+            "python",
 
-    css:
-      "css",
+        py:
+            "python",
 
-    sql:
-      "sql",
+        cpp:
+            "cpp",
 
-    text:
-      "none",
-  };
+        "c++":
+            "cpp",
 
-  return (
-    map[
-      String(
-        language || "text"
-      ).toLowerCase()
-    ] ||
-    "none"
-  );
+        c:
+            "c",
+
+        java:
+            "java",
+
+        html:
+            "markup",
+
+        xml:
+            "markup",
+
+        css:
+            "css",
+
+        json:
+            "json",
+
+        sql:
+            "sql",
+
+        bash:
+            "bash",
+
+        shell:
+            "bash",
+
+        php:
+            "php",
+
+        text:
+            "none",
+
+        plaintext:
+            "none"
+    };
+
+
+    return (
+        map[
+            String(
+                language ||
+                "text"
+            ).toLowerCase()
+        ] ||
+        "none"
+    );
 }
 
+
 // =====================================================
-// DOM READY
+// ADMIN - LOAD USERS
 // =====================================================
 
-document.addEventListener(
-  "DOMContentLoaded",
-  async () => {
-    // -------------------------------------------------
-    // LOAD SESSION
-    // -------------------------------------------------
+async function loadAdminUsers() {
 
-    loadSession();
+    if (!isOwner()) {
 
-    // -------------------------------------------------
-    // NAVIGATION
-    // -------------------------------------------------
-
-    document
-      .querySelectorAll(
-        ".nav-btn"
-      )
-      .forEach(
-        (button) => {
-          button.addEventListener(
-            "click",
-            () => {
-              showPage(
-                button.dataset
-                  .page
-              );
-            }
-          );
-        }
-      );
-
-    // -------------------------------------------------
-    // AUTH
-    // -------------------------------------------------
-
-    $("startBtn")
-      ?.addEventListener(
-        "click",
-        startNotebook
-      );
-
-    $("loginBtn")
-      ?.addEventListener(
-        "click",
-        loginUser
-      );
-
-    $("createBtn")
-      ?.addEventListener(
-        "click",
-        createNotebook
-      );
-
-    // -------------------------------------------------
-    // ENTER KEY
-    // -------------------------------------------------
-
-    $("nameInput")
-      ?.addEventListener(
-        "keydown",
-        (event) => {
-          if (
-            event.key ===
-            "Enter"
-          ) {
-            startNotebook();
-          }
-        }
-      );
-
-    $("passwordInput")
-      ?.addEventListener(
-        "keydown",
-        (event) => {
-          if (
-            event.key ===
-            "Enter"
-          ) {
-            loginUser();
-          }
-        }
-      );
-
-    $("confirmPasswordInput")
-      ?.addEventListener(
-        "keydown",
-        (event) => {
-          if (
-            event.key ===
-            "Enter"
-          ) {
-            createNotebook();
-          }
-        }
-      );
-
-    // -------------------------------------------------
-    // BACK
-    // -------------------------------------------------
-
-    $("backToUser")
-      ?.addEventListener(
-        "click",
-        () => {
-          $("passwordStep")?.classList.add(
-            "hidden"
-          );
-
-          $("userStep")?.classList.remove(
-            "hidden"
-          );
-
-          $("passwordInput").value =
-            "";
-        }
-      );
-
-    $("backToUserFromCreate")
-      ?.addEventListener(
-        "click",
-        () => {
-          $("createStep")?.classList.add(
-            "hidden"
-          );
-
-          $("userStep")?.classList.remove(
-            "hidden"
-          );
-
-          $("createPasswordInput").value =
-            "";
-
-          $("confirmPasswordInput").value =
-            "";
-        }
-      );
-
-    // -------------------------------------------------
-    // PASSWORD TOGGLES
-    // -------------------------------------------------
-
-    $("togglePassword")
-      ?.addEventListener(
-        "click",
-        () =>
-          togglePassword(
-            "passwordInput",
-            "togglePassword"
-          )
-      );
-
-    $("toggleCreatePassword")
-      ?.addEventListener(
-        "click",
-        () =>
-          togglePassword(
-            "createPasswordInput",
-            "toggleCreatePassword"
-          )
-      );
-
-    $("toggleConfirmPassword")
-      ?.addEventListener(
-        "click",
-        () =>
-          togglePassword(
-            "confirmPasswordInput",
-            "toggleConfirmPassword"
-          )
-      );
-
-    // -------------------------------------------------
-    // LOGOUT
-    // -------------------------------------------------
-
-    $("logoutBtn")
-      ?.addEventListener(
-        "click",
-        logout
-      );
-
-    $("profileChangeBtn")
-      ?.addEventListener(
-        "click",
-        logout
-      );
-
-    // -------------------------------------------------
-    // SEARCH
-    // -------------------------------------------------
-
-    $("searchBtn")
-      ?.addEventListener(
-        "click",
-        toggleSearch
-      );
-
-    $("searchInput")
-      ?.addEventListener(
-        "input",
-        (event) => {
-          performSearch(
-            event.target.value
-          );
-        }
-      );
-
-    // -------------------------------------------------
-    // RANDOM
-    // -------------------------------------------------
-
-    $("randomBtn")
-      ?.addEventListener(
-        "click",
-        () =>
-          renderHome(
-            true
-          )
-      );
-
-    // -------------------------------------------------
-    // NOTE FORM
-    // -------------------------------------------------
-
-    $("noteForm")
-      ?.addEventListener(
-        "submit",
-        saveNote
-      );
-
-      $("languageInput")
-  ?.addEventListener(
-    "change",
-    function () {
-      const customLanguage =
-        $("customLanguage");
-
-      if (!customLanguage) return;
-
-      if (this.value === "Other") {
-        customLanguage.style.display =
-          "block";
-
-        customLanguage.focus();
-      } else {
-        customLanguage.style.display =
-          "none";
-
-        customLanguage.value =
-          "";
-      }
-    }
-  );
-
-    $("clearForm")
-      ?.addEventListener(
-        "click",
-        clearNoteForm
-      );
-
-    // -------------------------------------------------
-    // VISIBILITY
-    // -------------------------------------------------
-
-    $("privateOption")
-      ?.addEventListener(
-        "change",
-        getSelectedVisibility
-      );
-
-    $("publicOption")
-      ?.addEventListener(
-        "change",
-        getSelectedVisibility
-      );
-
-    // -------------------------------------------------
-    // READER
-    // -------------------------------------------------
-
-    $("closeReader")
-      ?.addEventListener(
-        "click",
-        closeReader
-      );
-
-    $("prevQuestion")
-      ?.addEventListener(
-        "click",
-        previousQuestion
-      );
-
-    $("nextQuestion")
-      ?.addEventListener(
-        "click",
-        nextQuestion
-      );
-
-    $("copyCode")
-      ?.addEventListener(
-        "click",
-        copyCurrentCode
-      );
-
-    $("editNote")
-      ?.addEventListener(
-        "click",
-        editCurrentNote
-      );
-
-    $("deleteNote")
-      ?.addEventListener(
-        "click",
-        deleteCurrentNote
-      );
-
-    $("readerModal")
-      ?.addEventListener(
-        "click",
-        (event) => {
-          if (
-            event.target ===
-            $("readerModal")
-          ) {
-            closeReader();
-          }
-        }
-      );
-
-    // -------------------------------------------------
-    // ESC CLOSE
-    // -------------------------------------------------
-
-    document.addEventListener(
-      "keydown",
-      (event) => {
-        if (
-          event.key ===
-          "Escape"
-        ) {
-          closeReader();
-        }
-      }
-    );
-
-    // -------------------------------------------------
-    // EXISTING SESSION
-    // -------------------------------------------------
-
-    if (
-      currentUser &&
-      authToken
-    ) {
-      try {
-        await openNotebook();
-      } catch (error) {
-        console.error(
-          "SESSION ERROR:",
-          error
+        showToast(
+            "Owner access required",
+            "error"
         );
 
-        clearSession();
-
-        showLoginScreen();
-      }
-    } else {
-      showLoginScreen();
+        return;
     }
-  }
-);
 
-// async function askAssistant(message) {
-//   try {
-//     const response = await fetch(`${API_BASE}/assistant`, {
-//       method: "POST",
 
-//       headers: {
-//   "Content-Type": "application/json",
-//   ...(authToken && {
-//     Authorization: `Bearer ${authToken}`,
-//   }),
-// },
+    try {
 
-//       body: JSON.stringify({
-//         message: message,
-//         userName: currentUser?.name || currentUser || "",
-//       }),
-//     });
+        const data =
+            await apiRequest(
+                "/admin/users"
+            );
 
-//     const data = await response.json();
 
-//     if (!data.success) {
-//       throw new Error(
-//         data.message || "Assistant error"
-//       );
-//     }
+        const users =
+            data.users || [];
 
-//     return data.reply;
 
-//   } catch (error) {
-//     console.error("ASSISTANT ERROR:", error);
+        const userList =
+            $("adminUserList");
 
-//     return "Sorry, Assistant se response nahi mil raha.";
-//   }
-// }
+
+        const count =
+            $("adminUserCount");
+
+
+        const noteCount =
+            $("adminNoteCount");
+
+
+        if (count) {
+
+            count.textContent =
+                users.length;
+        }
+
+
+        const totalNotes =
+            users.reduce(
+                (total, user) =>
+                    total +
+                    Number(
+                        user.noteCount || 0
+                    ),
+                0
+            );
+
+
+        if (noteCount) {
+
+            noteCount.textContent =
+                totalNotes;
+        }
+
+
+        if (!userList) return;
+
+
+        if (!users.length) {
+
+            userList.innerHTML = `
+                <div class="empty-state">
+
+                    <h3>
+                        No users found
+                    </h3>
+
+                </div>
+            `;
+
+            return;
+        }
+
+
+        userList.innerHTML =
+            users
+                .map(user => {
+
+                    const locationText =
+                        user.location &&
+                        typeof user.location.latitude ===
+                            "number"
+                            ? `${user.location.latitude.toFixed(
+                                4
+                            )}, ${Number(
+                                user.location.longitude
+                            ).toFixed(4)}`
+                            : "Location unavailable";
+
+
+                    const userId =
+                        escapeHTML(
+                            String(
+                                user._id || ""
+                            )
+                        );
+
+
+                    const encodedName =
+                        encodeURIComponent(
+                            user.name || ""
+                        );
+
+
+                    return `
+                        <div
+                            class="admin-user-card"
+                        >
+
+                            <div>
+
+                                <div
+                                    class="admin-user-avatar"
+                                >
+                                    ${escapeHTML(
+                                        String(
+                                            user.name ||
+                                            "U"
+                                        )
+                                            .charAt(0)
+                                            .toUpperCase()
+                                    )}
+                                </div>
+
+
+                                <h3>
+                                    ${escapeHTML(
+                                        user.name
+                                    )}
+                                </h3>
+
+
+                                <p>
+                                    📝 ${
+                                        Number(
+                                            user.noteCount ||
+                                            0
+                                        )
+                                    } Notes
+                                </p>
+
+
+                                <p>
+                                    📍 ${escapeHTML(
+                                        locationText
+                                    )}
+                                </p>
+
+                            </div>
+
+
+                            <div
+                                class="admin-user-actions"
+                            >
+
+                                <button
+                                    class="soft-btn"
+                                    type="button"
+                                    data-admin-open="${encodedName}"
+                                >
+                                    Open Notebook
+                                </button>
+
+
+                                <button
+                                    class="delete-btn"
+                                    type="button"
+                                    data-admin-delete="${userId}"
+                                >
+                                    Delete User
+                                </button>
+
+                            </div>
+
+                        </div>
+                    `;
+                })
+                .join("");
+
+
+        // =============================================
+        // ADMIN EVENTS
+        // =============================================
+
+        userList
+            .querySelectorAll(
+                "[data-admin-open]"
+            )
+            .forEach(button => {
+
+                button.addEventListener(
+                    "click",
+                    () => {
+
+                        openAdminUser(
+                            decodeURIComponent(
+                                button.dataset.adminOpen
+                            )
+                        );
+                    }
+                );
+            });
+
+
+        userList
+            .querySelectorAll(
+                "[data-admin-delete]"
+            )
+            .forEach(button => {
+
+                button.addEventListener(
+                    "click",
+                    () => {
+
+                        deleteAdminUser(
+                            button.dataset.adminDelete
+                        );
+                    }
+                );
+            });
+
+    } catch (error) {
+
+        console.error(
+            "ADMIN USERS ERROR:",
+            error
+        );
+
+
+        showToast(
+            error.message ||
+            "Failed to load users",
+            "error"
+        );
+    }
+}
+
 
 // =====================================================
-// PERSONAL ASSISTANT - PA MODE
+// ADMIN - OPEN USER NOTEBOOK
 // =====================================================
 
-let paConversation = [];
+async function openAdminUser(
+    userName
+) {
 
-let paRecognition = null;
+    if (!isOwner()) {
 
-let paListening = false;
+        showToast(
+            "Owner access required",
+            "error"
+        );
+
+        return;
+    }
+
+
+    try {
+
+        const data =
+            await apiRequest(
+                `/admin/users/${encodeURIComponent(
+                    userName
+                )}/notes`
+            );
+
+
+        const notes =
+            data.notes || [];
+
+
+        const area =
+            $("adminNotesArea");
+
+
+        if (!area) return;
+
+
+        area.innerHTML = `
+
+            <div class="admin-notebook-header">
+
+                <h2>
+                    ${escapeHTML(
+                        userName
+                    )}'s Notebook
+                </h2>
+
+                <span>
+                    ${notes.length} Notes
+                </span>
+
+            </div>
+
+
+            <div class="admin-notes-list">
+
+                ${
+                    notes.length
+                        ? notes
+                            .map(note =>
+                                createAdminNoteCard(
+                                    note
+                                )
+                            )
+                            .join("")
+                        : `
+                            <div class="empty-state">
+                                <h3>
+                                    No notes found
+                                </h3>
+                            </div>
+                        `
+                }
+
+            </div>
+        `;
+
+
+        area
+            .querySelectorAll(
+                "[data-admin-edit]"
+            )
+            .forEach(button => {
+
+                button.addEventListener(
+                    "click",
+                    () => {
+
+                        editAdminNote(
+                            button.dataset.adminEdit,
+                            userName
+                        );
+                    }
+                );
+            });
+
+
+        area
+            .querySelectorAll(
+                "[data-admin-note-delete]"
+            )
+            .forEach(button => {
+
+                button.addEventListener(
+                    "click",
+                    () => {
+
+                        deleteAdminNote(
+                            button.dataset.adminNoteDelete,
+                            userName
+                        );
+                    }
+                );
+            });
+
+    } catch (error) {
+
+        console.error(
+            "OPEN ADMIN USER ERROR:",
+            error
+        );
+
+
+        showToast(
+            error.message ||
+            "Failed to open notebook",
+            "error"
+        );
+    }
+}
 
 
 // =====================================================
-// ELEMENTS
+// ADMIN NOTE CARD
 // =====================================================
 
-const paInput =
-  document.getElementById("paInput");
+function createAdminNoteCard(note) {
 
-const paSendBtn =
-  document.getElementById("paSendBtn");
+    const noteId =
+        String(
+            note._id ||
+            note.id ||
+            ""
+        );
 
-const paMicBtn =
-  document.getElementById("paMicBtn");
 
-const paMessages =
-  document.getElementById("paMessages");
+    return `
 
-const paLanguageBtn =
-  document.getElementById("paLanguageBtn");
+        <div
+            class="admin-note-card"
+        >
 
-let paLanguage = "hindi";
+            <span>
+                ${escapeHTML(
+                    note.subject ||
+                    "General"
+                )}
+            </span>
 
-const paTyping =
-  document.getElementById("paTyping");
 
-const paVoiceToggle =
-  document.getElementById("paVoiceToggle");
+            <h3>
+                ${escapeHTML(
+                    note.question ||
+                    "Question"
+                )}
+            </h3>
 
-const paStopVoice =
-  document.getElementById("paStopVoice");
 
-const paClearBtn =
-  document.getElementById("paClearBtn");
+            <p>
+                ${formatAnswer(
+                    note.answer ||
+                    ""
+                )}
+            </p>
+
+
+            ${
+                note.code
+                    ? `
+                        <pre>
+                            <code>
+${escapeHTML(note.code)}
+                            </code>
+                        </pre>
+                    `
+                    : ""
+            }
+
+
+            <div
+                class="admin-note-actions"
+            >
+
+                <button
+                    class="soft-btn"
+                    type="button"
+                    data-admin-edit="${escapeHTML(
+                        noteId
+                    )}"
+                >
+                    ✎ Edit
+                </button>
+
+
+                <button
+                    class="delete-btn"
+                    type="button"
+                    data-admin-note-delete="${escapeHTML(
+                        noteId
+                    )}"
+                >
+                    🗑 Delete
+                </button>
+
+            </div>
+
+        </div>
+
+    `;
+}
+
+
+// =====================================================
+// ADMIN - EDIT NOTE
+// =====================================================
+
+async function editAdminNote(
+    noteId,
+    userName
+) {
+
+    if (!isOwner()) {
+
+        showToast(
+            "Owner access required",
+            "error"
+        );
+
+        return;
+    }
+
+try {
+
+        const data =
+            await apiRequest(
+                `/admin/notes/${encodeURIComponent(
+                    noteId
+                )}`
+            );
+
+
+        const note =
+            data.note ||
+            data;
+
+
+        if (!note) {
+
+            throw new Error(
+                "Note not found"
+            );
+        }
+
+
+        // =============================================
+        // Open normal add/edit form
+        // =============================================
+
+        editingNoteId =
+            note._id ||
+            note.id;
+
+
+        showPage("add");
+
+
+        if ($("subjectInput")) {
+
+            $("subjectInput").value =
+                note.subject || "";
+        }
+
+
+        if ($("questionInput")) {
+
+            $("questionInput").value =
+                note.question || "";
+        }
+
+
+        if ($("answerInput")) {
+
+            $("answerInput").value =
+                note.answer || "";
+        }
+
+
+        if ($("codeInput")) {
+
+            $("codeInput").value =
+                note.code || "";
+        }
+
+
+        if ($("languageInput")) {
+
+            const savedLanguage =
+                note.language ||
+                "text";
+
+
+            const options =
+                Array.from(
+                    $("languageInput").options
+                ).map(
+                    option =>
+                        option.value
+                );
+
+
+            if (
+                options.includes(
+                    savedLanguage
+                )
+            ) {
+
+                $("languageInput").value =
+                    savedLanguage;
+
+            } else {
+
+                $("languageInput").value =
+                    "Other";
+
+
+                if ($("customLanguage")) {
+
+                    $("customLanguage")
+                        .style
+                        .display =
+                        "block";
+
+                    $("customLanguage")
+                        .value =
+                        savedLanguage;
+                }
+            }
+        }
+
+
+        if (
+            note.visibility ===
+            "public"
+        ) {
+
+            $("publicOption").checked =
+                true;
+
+            $("privateOption").checked =
+                false;
+
+        } else {
+
+            $("privateOption").checked =
+                true;
+
+            $("publicOption").checked =
+                false;
+        }
+
+
+        getSelectedVisibility();
+
+
+        const title =
+            $("addPage")
+                ?.querySelector(
+                    ".page-intro h1"
+                );
+
+
+        if (title) {
+
+            title.textContent =
+                `Edit Note (${userName})`;
+        }
+
+
+        if ($("saveNoteBtn")) {
+
+            $("saveNoteBtn").innerHTML =
+                "UPDATE NOTE →";
+        }
+
+
+        showToast(
+            "Note loaded for editing",
+            "success"
+        );
+
+    } catch (error) {
+
+        console.error(
+            "ADMIN EDIT NOTE ERROR:",
+            error
+        );
+
+
+        showToast(
+            error.message ||
+            "Unable to edit note",
+            "error"
+        );
+    }
+}
+
+
+// =====================================================
+// ADMIN - DELETE NOTE
+// =====================================================
+
+async function deleteAdminNote(
+    noteId,
+    userName
+) {
+
+    if (!isOwner()) {
+
+        showToast(
+            "Owner access required",
+            "error"
+        );
+
+        return;
+    }
+
+
+    const confirmed =
+        window.confirm(
+            "Delete this note permanently?"
+        );
+
+
+    if (!confirmed) return;
+
+
+    try {
+
+        await apiRequest(
+            `/admin/notes/${encodeURIComponent(
+                noteId
+            )}`,
+            {
+                method: "DELETE"
+            }
+        );
+
+
+        showToast(
+            "Note deleted successfully",
+            "success"
+        );
+
+
+        await openAdminUser(
+            userName
+        );
+
+
+        await loadAdminUsers();
+
+    } catch (error) {
+
+        console.error(
+            "ADMIN DELETE NOTE ERROR:",
+            error
+        );
+
+
+        showToast(
+            error.message ||
+            "Failed to delete note",
+            "error"
+        );
+    }
+}
+
+
+// =====================================================
+// ADMIN - DELETE USER
+// =====================================================
+
+async function deleteAdminUser(
+    userId
+) {
+
+    if (!isOwner()) {
+
+        showToast(
+            "Owner access required",
+            "error"
+        );
+
+        return;
+    }
+
+
+    const confirmed =
+        window.confirm(
+            "This will permanently delete the user and all their notes. Continue?"
+        );
+
+
+    if (!confirmed) return;
+
+
+    try {
+
+        await apiRequest(
+            `/admin/users/${encodeURIComponent(
+                userId
+            )}`,
+            {
+                method: "DELETE"
+            }
+        );
+
+
+        showToast(
+            "User deleted successfully",
+            "success"
+        );
+
+
+        if ($("adminNotesArea")) {
+
+            $("adminNotesArea").innerHTML =
+                "";
+        }
+
+
+        await loadAdminUsers();
+
+    } catch (error) {
+
+        console.error(
+            "ADMIN DELETE USER ERROR:",
+            error
+        );
+
+
+        showToast(
+            error.message ||
+            "Failed to delete user",
+            "error"
+        );
+    }
+}
+
+
+// =====================================================
+// PERSONAL ASSISTANT
+// =====================================================
+
+function getPAElements() {
+
+    return {
+
+        input:
+            $("paInput"),
+
+        send:
+            $("paSendBtn"),
+
+        mic:
+            $("paMicBtn"),
+
+        messages:
+            $("paMessages"),
+
+        language:
+            $("paLanguageBtn"),
+
+        typing:
+            $("paTyping"),
+
+        voiceToggle:
+            $("paVoiceToggle"),
+
+        stopVoice:
+            $("paStopVoice"),
+
+        clear:
+            $("paClearBtn")
+    };
+}
 
 
 // =====================================================
@@ -3105,62 +4024,107 @@ const paClearBtn =
 // =====================================================
 
 function addPAMessage(
-  message,
-  type = "assistant"
+    message,
+    type = "assistant"
 ) {
 
-  if (!paMessages) return;
+    const {
+        messages
+    } = getPAElements();
 
-  const wrapper =
-    document.createElement("div");
 
-  wrapper.className =
-    `pa-message ${type}`;
+    if (!messages) return;
 
-  const avatar =
-    document.createElement("div");
 
-  avatar.className =
-    "pa-message-avatar";
+    const wrapper =
+        document.createElement(
+            "div"
+        );
 
-  avatar.textContent =
-    type === "user"
-      ? "👤"
-      : "🤖";
 
-  const bubble =
-    document.createElement("div");
+    wrapper.className =
+        `pa-message ${type}`;
 
-  bubble.className =
-    "pa-bubble";
 
-  const title =
-    document.createElement("strong");
+    const avatar =
+        document.createElement(
+            "div"
+        );
 
-  title.textContent =
-    type === "user"
-      ? "You"
-      : "PA Assistant";
 
-  const text =
-    document.createElement("div");
+    avatar.className =
+        "pa-message-avatar";
 
-  text.className =
-    "pa-text";
 
-  text.textContent =
-    message;
+    avatar.textContent =
+        type === "user"
+            ? "👤"
+            : "🤖";
 
-  bubble.appendChild(title);
-  bubble.appendChild(text);
 
-  wrapper.appendChild(avatar);
-  wrapper.appendChild(bubble);
+    const bubble =
+        document.createElement(
+            "div"
+        );
 
-  paMessages.appendChild(wrapper);
 
-  paMessages.scrollTop =
-    paMessages.scrollHeight;
+    bubble.className =
+        "pa-bubble";
+
+
+    const title =
+        document.createElement(
+            "strong"
+        );
+
+
+    title.textContent =
+        type === "user"
+            ? "You"
+            : "PA Assistant";
+
+
+    const text =
+        document.createElement(
+            "div"
+        );
+
+
+    text.className =
+        "pa-text";
+
+
+    text.textContent =
+        message;
+
+
+    bubble.appendChild(
+        title
+    );
+
+
+    bubble.appendChild(
+        text
+    );
+
+
+    wrapper.appendChild(
+        avatar
+    );
+
+
+    wrapper.appendChild(
+        bubble
+    );
+
+
+    messages.appendChild(
+        wrapper
+    );
+
+
+    messages.scrollTop =
+        messages.scrollHeight;
 }
 
 
@@ -3170,574 +4134,1121 @@ function addPAMessage(
 
 function speakPA(text) {
 
-  if (
-    !paVoiceToggle ||
-    !paVoiceToggle.checked
-  ) {
-    return;
-  }
+    const {
+        voiceToggle
+    } = getPAElements();
 
-  if (
-    !("speechSynthesis" in window)
-  ) {
-    return;
-  }
 
-  window.speechSynthesis.cancel();
+    if (
+        !voiceToggle ||
+        !voiceToggle.checked
+    ) {
 
-  const cleanText =
-    text
-      .replace(/```[\s\S]*?```/g, "Code omitted.")
-      .replace(/[*_#`]/g, "")
-      .replace(/\n+/g, " ")
-      .trim();
+        return;
+    }
 
-  if (!cleanText) return;
 
-  const utterance =
-    new SpeechSynthesisUtterance(
-      cleanText
+    if (
+        !("speechSynthesis" in window)
+    ) {
+
+        return;
+    }
+
+
+    window.speechSynthesis.cancel();
+
+
+    const cleanText =
+        String(text || "")
+            .replace(
+                /`[\s\S]*?`/g,
+                "Code omitted."
+            )
+            .replace(
+                /[*_#`]/g,
+                ""
+            )
+            .replace(
+                /\n+/g,
+                " "
+            )
+            .trim();
+
+
+    if (!cleanText) return;
+
+
+    const utterance =
+        new SpeechSynthesisUtterance(
+            cleanText
+        );
+
+
+    utterance.rate = 1;
+    utterance.pitch = 1;
+    utterance.volume = 1;
+
+
+    const voices =
+        window.speechSynthesis
+            .getVoices();
+
+
+    if (paLanguage === "hindi") {
+
+        const hindiVoice =
+            voices.find(
+                voice =>
+                    voice.lang
+                        ?.toLowerCase()
+                        .startsWith("hi")
+            );
+
+
+        if (hindiVoice) {
+
+            utterance.voice =
+                hindiVoice;
+        }
+
+        utterance.lang =
+            "hi-IN";
+
+    } else {
+
+        const indianEnglish =
+            voices.find(
+                voice =>
+                    voice.lang
+                        ?.toLowerCase()
+                        .startsWith("en-in")
+            );
+
+
+        if (indianEnglish) {
+
+            utterance.voice =
+                indianEnglish;
+        }
+
+        utterance.lang =
+            "en-IN";
+    }
+
+
+    window.speechSynthesis.speak(
+        utterance
     );
-
-  utterance.rate = 1;
-  utterance.pitch = 1;
-  utterance.volume = 1;
-
-  // Try Hindi voice when response contains Hindi.
-  const voices =
-    window.speechSynthesis.getVoices();
-
-  const hindiVoice =
-    voices.find(
-      voice =>
-        voice.lang
-          ?.toLowerCase()
-          .startsWith("hi")
-    );
-
-  if (hindiVoice) {
-    utterance.voice =
-      hindiVoice;
-  }
-
-  window.speechSynthesis.speak(
-    utterance
-  );
 }
 
 
 // =====================================================
-// SEND MESSAGE
+// SEND PA MESSAGE
 // =====================================================
 
 async function sendPAMessage() {
 
-  if (!paInput) return;
+    const {
+        input,
+        send,
+        typing
+    } = getPAElements();
 
-  const message =
-    paInput.value.trim();
 
-  if (!message) return;
+    if (!input) return;
 
-  paInput.value = "";
 
-  addPAMessage(
-    message,
-    "user"
-  );
+    const message =
+        input.value.trim();
 
-  paConversation.push({
-    role: "user",
-    content: message,
-  });
 
-  if (paTyping) {
-    paTyping.classList.remove(
-      "hidden"
+    if (!message) return;
+
+
+    input.value = "";
+
+
+    addPAMessage(
+        message,
+        "user"
     );
-  }
 
-  if (paSendBtn) {
-    paSendBtn.disabled = true;
-  }
-
-  try {
-
-    const data =
-      await apiRequest(
-        "/assistant",
-        {
-          method: "POST",
-
-          body: JSON.stringify({
-            message,
-
-            userName:
-              currentUser?.name || "",
-
-            conversation:
-              paConversation,
-          }),
-        }
-      );
-
-    if (!data.success) {
-      throw new Error(
-        data.message ||
-        "Assistant failed"
-      );
-    }
-
-    const answer =
-      data.answer ||
-      data.reply ||
-      "I could not generate an answer.";
 
     paConversation.push({
-      role: "assistant",
-      content: answer,
+
+        role: "user",
+
+        content: message
     });
 
-    addPAMessage(
-      answer,
-      "assistant"
-    );
 
-    speakPA(answer);
+    if (typing) {
 
-  } catch (error) {
-
-    console.error(
-      "PA MODE ERROR:",
-      error
-    );
-
-    addPAMessage(
-      `❌ ${
-        error.message ||
-        "Unable to contact Personal Assistant."
-      }`,
-      "assistant"
-    );
-
-  } finally {
-
-    if (paTyping) {
-      paTyping.classList.add(
-        "hidden"
-      );
+        typing.classList.remove(
+            "hidden"
+        );
     }
 
-    if (paSendBtn) {
-      paSendBtn.disabled = false;
+
+    if (send) {
+
+        send.disabled = true;
     }
 
-    paInput?.focus();
-  }
-}
+
+    try {
+
+        const data =
+            await apiRequest(
+                "/assistant",
+                {
+                    method: "POST",
+
+                    body:
+                        JSON.stringify({
+
+                            message,
+
+                            userName:
+                                currentUser?.name ||
+                                "",
+
+                            conversation:
+                                paConversation
+                        })
+                }
+            );
 
 
-// =====================================================
-// SEND BUTTON
-// =====================================================
+        if (
+            data.success === false
+        ) {
 
-if (paSendBtn) {
-
-  paSendBtn.addEventListener(
-    "click",
-    sendPAMessage
-  );
-
-}
+            throw new Error(
+                data.message ||
+                "Assistant failed"
+            );
+        }
 
 
-// =====================================================
-// ENTER TO SEND
-// =====================================================
-
-if (paInput) {
-
-  paInput.addEventListener(
-    "keydown",
-    event => {
-
-      if (
-        event.key === "Enter" &&
-        !event.shiftKey
-      ) {
-
-        event.preventDefault();
-
-        sendPAMessage();
-
-      }
-
-    }
-  );
-
-}
+        const answer =
+            data.answer ||
+            data.reply ||
+            "I could not generate an answer.";
 
 
-// =====================================================
-// STOP VOICE
-// =====================================================
+        paConversation.push({
 
-if (paStopVoice) {
+            role:
+                "assistant",
 
-  paStopVoice.addEventListener(
-    "click",
-    () => {
-
-      if (
-        "speechSynthesis"
-        in window
-      ) {
-
-        window.speechSynthesis.cancel();
-
-      }
-
-    }
-  );
-
-}
+            content:
+                answer
+        });
 
 
-// =====================================================
-// CLEAR CHAT
-// =====================================================
-
-if (paClearBtn) {
-
-  paClearBtn.addEventListener(
-    "click",
-    () => {
-
-      paConversation = [];
-
-      if (paMessages) {
-
-        paMessages.innerHTML = `
-          <div class="pa-message assistant">
-
-            <div class="pa-message-avatar">
-              🤖
-            </div>
-
-            <div class="pa-bubble">
-
-              <strong>
-                PA Assistant
-              </strong>
-
-              <p>
-                Chat cleared. How can I help you? 👋
-              </p>
-
-            </div>
-
-          </div>
-        `;
-
-      }
-
-    }
-  );
-
-}
-
-if (paLanguageBtn) {
-
-  paLanguageBtn.addEventListener(
-    "click",
-    () => {
-
-      if (paLanguage === "hindi") {
-
-        paLanguage =
-          "english";
-
-        paLanguageBtn.textContent =
-          "EN";
-
-        paLanguageBtn.classList.add(
-          "english-mode"
+        addPAMessage(
+            answer,
+            "assistant"
         );
 
-        paLanguageBtn.title =
-          "English / Hinglish Voice Mode";
 
-        showToast(
-          "English / Hinglish voice mode ON",
-          "success"
-        );
+        speakPA(answer);
 
-      } else {
-
-        paLanguage =
-          "hindi";
-
-        paLanguageBtn.textContent =
-          "हिं";
-
-        paLanguageBtn.classList.remove(
-          "english-mode"
-        );
-
-        paLanguageBtn.title =
-          "Hindi Voice Mode";
-
-        showToast(
-          "Hindi voice mode ON",
-          "success"
-        );
-
-      }
-
-    }
-  );
-
-}
-
-// =====================================================
-// VOICE INPUT
-// =====================================================
-function setupPARecognition() {
-
-  const SpeechRecognition =
-    window.SpeechRecognition ||
-    window.webkitSpeechRecognition;
-
-
-  if (!SpeechRecognition) {
-
-    if (paMicBtn) {
-
-      paMicBtn.disabled =
-        true;
-
-      paMicBtn.title =
-        "Voice input is not supported in this browser";
-
-    }
-
-    return;
-
-  }
-
-
-  paRecognition =
-    new SpeechRecognition();
-
-
-  paRecognition.continuous =
-    false;
-
-  paRecognition.interimResults =
-    false;
-
-
-  // ==========================================
-  // START
-  // ==========================================
-
-  paRecognition.onstart = () => {
-
-    paListening =
-      true;
-
-    if (paMicBtn) {
-
-      paMicBtn.textContent =
-        "🔴";
-
-    }
-
-  };
-
-
-  // ==========================================
-  // RESULT
-  // ==========================================
-
-  paRecognition.onresult =
-    event => {
-
-      const transcript =
-        event
-          .results[0][0]
-          .transcript;
-
-      console.log(
-        "Voice Input:",
-        transcript
-      );
-
-
-      if (paInput) {
-
-        paInput.value =
-          transcript;
-
-      }
-
-
-      // Automatically send message
-      sendPAMessage();
-
-    };
-
-
-  // ==========================================
-  // ERROR
-  // ==========================================
-
-  paRecognition.onerror =
-    event => {
-
-      console.error(
-        "PA SPEECH ERROR:",
-        event.error
-      );
-
-      if (
-        event.error !==
-        "aborted"
-      ) {
-
-        showToast(
-          "Voice input error: " +
-          event.error,
-          "error"
-        );
-
-      }
-
-    };
-
-
-  // ==========================================
-  // END
-  // ==========================================
-
-  paRecognition.onend = () => {
-
-    paListening =
-      false;
-
-    if (paMicBtn) {
-
-      paMicBtn.textContent =
-        "🎤";
-
-    }
-
-  };
-
-}
-
-setupPARecognition();
-
-
-// =====================================================
-// MIC BUTTON
-// =====================================================
-
-if (paMicBtn) {
-
-  paMicBtn.addEventListener(
-    "click",
-    () => {
-
-      if (!paRecognition) {
-
-        alert(
-          "Voice input is not supported in this browser."
-        );
-
-        return;
-
-      }
-
-
-      if (paListening) {
-
-        paRecognition.stop();
-
-        return;
-
-      }
-
-
-      // ==========================================
-      // HINDI MODE
-      // ==========================================
-
-      if (
-        paLanguage ===
-        "hindi"
-      ) {
-
-        paRecognition.lang =
-          "hi-IN";
-
-        console.log(
-          "Hindi Voice Mode"
-        );
-
-      }
-
-      
-
-      // ==========================================
-      // ENGLISH / HINGLISH MODE
-      // ==========================================
-
-      else {
-
-        paRecognition.lang =
-          "en-IN";
-
-        console.log(
-          "English / Hinglish Voice Mode"
-        );
-
-      }
-
-
-      try {
-
-        paRecognition.start();
-
-      } catch (error) {
+    } catch (error) {
 
         console.error(
-          "MIC START ERROR:",
-          error
+            "PA MODE ERROR:",
+            error
         );
 
-      }
 
+        addPAMessage(
+            `❌ ${
+                error.message ||
+                "Unable to contact Personal Assistant."
+            }`,
+            "assistant"
+        );
+
+    } finally {
+
+        if (typing) {
+
+            typing.classList.add(
+                "hidden"
+            );
+        }
+
+
+        if (send) {
+
+            send.disabled =
+                false;
+        }
+
+
+        input?.focus();
     }
-  );
-
 }
 
-// paMicBtn.addEventListener(
-//   "click",
-//   () => {
 
-//     const recognition =
-//       new SpeechRecognition();
+// =====================================================
+// PA LANGUAGE
+// =====================================================
 
-//     recognition.lang = paLanguage;
+function updatePALanguageUI() {
 
-//     recognition.interimResults = false;
-
-//     recognition.continuous = false;
+    const {
+        language
+    } = getPAElements();
 
 
-//     recognition.start();
+    if (!language) return;
 
-//   }
-// );
+
+    if (paLanguage === "hindi") {
+
+        language.textContent =
+            "हिं";
+
+
+        language.classList.remove(
+            "english-mode"
+        );
+
+
+        language.title =
+            "Hindi Voice Mode";
+
+    } else {
+
+        language.textContent =
+            "EN";
+
+
+        language.classList.add(
+            "english-mode"
+        );
+
+
+        language.title =
+            "English / Hinglish Voice Mode";
+    }
+}
+
+
+// =====================================================
+// PA VOICE INPUT
+// =====================================================
+
+function setupPARecognition() {
+
+    const {
+        mic
+    } = getPAElements();
+
+
+    const SpeechRecognition =
+        window.SpeechRecognition ||
+        window.webkitSpeechRecognition;
+
+
+    if (!SpeechRecognition) {
+
+        if (mic) {
+
+            mic.disabled = true;
+
+            mic.title =
+                "Voice input is not supported in this browser.";
+        }
+
+
+        return;
+    }
+
+
+    paRecognition =
+        new SpeechRecognition();
+
+
+    paRecognition.continuous =
+        false;
+
+
+    paRecognition.interimResults =
+        false;
+
+
+    paRecognition.onstart =
+        () => {
+
+            paListening =
+                true;
+
+
+            if (mic) {
+
+                mic.textContent =
+                    "🔴";
+            }
+        };
+
+
+    paRecognition.onresult =
+        event => {
+
+            const transcript =
+                event
+                    .results[0][0]
+                    .transcript;
+
+
+            if ($("paInput")) {
+
+                $("paInput").value =
+                    transcript;
+            }
+
+
+            sendPAMessage();
+        };
+
+
+    paRecognition.onerror =
+        event => {
+
+            console.error(
+                "PA SPEECH ERROR:",
+                event.error
+            );
+
+
+            if (
+                event.error !==
+                "aborted"
+            ) {
+
+                showToast(
+                    "Voice input error: " +
+                    event.error,
+                    "error"
+                );
+            }
+        };
+
+
+    paRecognition.onend =
+        () => {
+
+            paListening =
+                false;
+
+
+            if (mic) {
+
+                mic.textContent =
+                    "🎤";
+            }
+        };
+}
+
+
+// =====================================================
+// DOM READY
+// =====================================================
+
+document.addEventListener(
+    "DOMContentLoaded",
+    async () => {
+
+        // =============================================
+        // SESSION
+        // =============================================
+
+        loadSession();
+
+
+        // =============================================
+        // NAVIGATION
+        // =============================================
+
+        document
+            .querySelectorAll(
+                ".nav-btn"
+            )
+            .forEach(button => {
+
+                button.addEventListener(
+                    "click",
+                    () => {
+
+                        showPage(
+                            button.dataset.page
+                        );
+                    }
+                );
+            });
+
+
+        // =============================================
+        // AUTH
+        // =============================================
+
+        $("startBtn")
+            ?.addEventListener(
+                "click",
+                startNotebook
+            );
+
+
+        $("loginBtn")
+            ?.addEventListener(
+                "click",
+                loginUser
+            );
+
+
+        $("createBtn")
+            ?.addEventListener(
+                "click",
+                createNotebook
+            );
+
+
+        // =============================================
+        // ENTER KEY
+        // =============================================
+
+        $("nameInput")
+            ?.addEventListener(
+                "keydown",
+                event => {
+
+                    if (
+                        event.key ===
+                        "Enter"
+                    ) {
+
+                        startNotebook();
+                    }
+                }
+            );
+
+
+        $("passwordInput")
+            ?.addEventListener(
+                "keydown",
+                event => {
+
+                    if (
+                        event.key ===
+                        "Enter"
+                    ) {
+
+                        loginUser();
+                    }
+                }
+            );
+
+
+        $("confirmPasswordInput")
+            ?.addEventListener(
+                "keydown",
+                event => {
+
+                    if (
+                        event.key ===
+                        "Enter"
+                    ) {
+
+                        createNotebook();
+                    }
+                }
+            );
+
+
+        // =============================================
+        // BACK BUTTONS
+        // =============================================
+
+        $("backToUser")
+            ?.addEventListener(
+                "click",
+                () => {
+
+                    $("passwordStep")
+                        ?.classList
+                        .add("hidden");
+
+
+                    $("userStep")
+                        ?.classList
+                        .remove("hidden");
+
+
+                    if ($("passwordInput")) {
+
+                        $("passwordInput").value =
+                            "";
+                    }
+                }
+            );
+
+
+        $("backToUserFromCreate")
+            ?.addEventListener(
+                "click",
+                () => {
+
+                    $("createStep")
+                        ?.classList
+                        .add("hidden");
+
+
+                    $("userStep")
+                        ?.classList
+                        .remove("hidden");
+
+
+                    if (
+                        $("createPasswordInput")
+                    ) {
+
+                        $("createPasswordInput").value =
+                            "";
+                    }
+
+
+                    if (
+                        $("confirmPasswordInput")
+                    ) {
+
+                        $("confirmPasswordInput").value =
+                            "";
+                    }
+                }
+            );
+
+
+        // =============================================
+        // PASSWORD TOGGLES
+        // =============================================
+
+        $("togglePassword")
+            ?.addEventListener(
+                "click",
+                () =>
+                    togglePassword(
+                        "passwordInput",
+                        "togglePassword"
+                    )
+            );
+
+
+        $("toggleCreatePassword")
+            ?.addEventListener(
+                "click",
+                () =>
+                    togglePassword(
+                        "createPasswordInput",
+                        "toggleCreatePassword"
+                    )
+            );
+
+
+        $("toggleConfirmPassword")
+            ?.addEventListener(
+                "click",
+                () =>
+                    togglePassword(
+                        "confirmPasswordInput",
+                        "toggleConfirmPassword"
+                    )
+            );
+
+
+        // =============================================
+        // LOGOUT
+        // =============================================
+
+        $("logoutBtn")
+            ?.addEventListener(
+                "click",
+                logout
+            );
+
+
+        $("profileChangeBtn")
+            ?.addEventListener(
+                "click",
+                logout
+            );
+
+
+        // =============================================
+        // SEARCH
+        // =============================================
+
+        $("searchBtn")
+            ?.addEventListener(
+                "click",
+                toggleSearch
+            );
+
+
+        $("searchInput")
+            ?.addEventListener(
+                "input",
+                event => {
+
+                    performSearch(
+                        event.target.value
+                    );
+                }
+            );
+
+
+        // =============================================
+        // RANDOM
+        // =============================================
+
+        $("randomBtn")
+            ?.addEventListener(
+                "click",
+                () =>
+                    renderHome(true)
+            );
+
+
+        // =============================================
+        // NOTE FORM
+        // =============================================
+
+        $("noteForm")
+            ?.addEventListener(
+                "submit",
+                saveNote
+            );
+
+
+        $("languageInput")
+            ?.addEventListener(
+                "change",
+                function () {
+
+                    const customLanguage =
+                        $("customLanguage");
+
+
+                    if (!customLanguage) {
+                        return;
+                    }
+
+
+                    if (
+                        this.value ===
+                        "Other"
+                    ) {
+
+                        customLanguage.style.display =
+                            "block";
+
+                        customLanguage.focus();
+
+                    } else {
+
+                        customLanguage.style.display =
+                            "none";
+
+                        customLanguage.value =
+                            "";
+                    }
+                }
+            );
+
+
+        $("clearForm")
+            ?.addEventListener(
+                "click",
+                clearNoteForm
+            );
+
+// =============================================
+        // VISIBILITY
+        // =============================================
+
+        $("privateOption")
+            ?.addEventListener(
+                "change",
+                getSelectedVisibility
+            );
+
+
+        $("publicOption")
+            ?.addEventListener(
+                "change",
+                getSelectedVisibility
+            );
+
+
+        // =============================================
+        // READER
+        // =============================================
+
+        $("closeReader")
+            ?.addEventListener(
+                "click",
+                closeReader
+            );
+
+
+        $("prevQuestion")
+            ?.addEventListener(
+                "click",
+                previousQuestion
+            );
+
+
+        $("nextQuestion")
+            ?.addEventListener(
+                "click",
+                nextQuestion
+            );
+
+
+        $("copyCode")
+            ?.addEventListener(
+                "click",
+                copyCurrentCode
+            );
+
+
+        $("editNote")
+            ?.addEventListener(
+                "click",
+                editCurrentNote
+            );
+
+
+        $("deleteNote")
+            ?.addEventListener(
+                "click",
+                deleteCurrentNote
+            );
+
+
+        $("readerModal")
+            ?.addEventListener(
+                "click",
+                event => {
+
+                    if (
+                        event.target ===
+                        $("readerModal")
+                    ) {
+
+                        closeReader();
+                    }
+                }
+            );
+
+
+        // =============================================
+        // ESC CLOSE
+        // =============================================
+
+        document.addEventListener(
+            "keydown",
+            event => {
+
+                if (
+                    event.key ===
+                    "Escape"
+                ) {
+
+                    closeReader();
+                }
+            }
+        );
+
+
+        // =============================================
+        // ADMIN
+        // =============================================
+
+        $("adminNavBtn")
+            ?.addEventListener(
+                "click",
+                () => {
+
+                    if (!isOwner()) {
+
+                        showToast(
+                            "Owner access required",
+                            "error"
+                        );
+
+                        return;
+                    }
+
+
+                    showPage("admin");
+                }
+            );
+
+
+        // =============================================
+        // PERSONAL ASSISTANT
+        // =============================================
+
+        const {
+            input: paInput,
+            send: paSendBtn,
+            mic: paMicBtn,
+            language: paLanguageBtn,
+            stopVoice: paStopVoice,
+            clear: paClearBtn
+        } = getPAElements();
+
+
+        // =============================================
+        // PA SEND
+        // =============================================
+
+        paSendBtn?.addEventListener(
+            "click",
+            sendPAMessage
+        );
+
+
+        paInput?.addEventListener(
+            "keydown",
+            event => {
+
+                if (
+                    event.key ===
+                        "Enter" &&
+                    !event.shiftKey
+                ) {
+
+                    event.preventDefault();
+
+                    sendPAMessage();
+                }
+            }
+        );
+
+
+        // =============================================
+        // PA STOP VOICE
+        // =============================================
+
+        paStopVoice?.addEventListener(
+            "click",
+            () => {
+
+                if (
+                    "speechSynthesis"
+                    in window
+                ) {
+
+                    window.speechSynthesis.cancel();
+                }
+            }
+        );
+
+
+        // =============================================
+        // PA CLEAR
+        // =============================================
+
+        paClearBtn?.addEventListener(
+            "click",
+            () => {
+
+                paConversation = [];
+
+
+                const messages =
+                    $("paMessages");
+
+
+                if (messages) {
+
+                    messages.innerHTML = `
+
+                        <div
+                            class="pa-message assistant"
+                        >
+
+                            <div
+                                class="pa-message-avatar"
+                            >
+                                🤖
+                            </div>
+
+
+                            <div
+                                class="pa-bubble"
+                            >
+
+                                <strong>
+                                    PA Assistant
+                                </strong>
+
+                                <p>
+                                    Chat cleared.
+                                    How can I help you? 👋
+                                </p>
+
+                            </div>
+
+                        </div>
+                    `;
+                }
+            }
+        );
+
+
+        // =============================================
+        // PA LANGUAGE TOGGLE
+        // =============================================
+
+        paLanguageBtn?.addEventListener(
+            "click",
+            () => {
+
+                if (
+                    paLanguage ===
+                    "hindi"
+                ) {
+
+                    paLanguage =
+                        "english";
+
+
+                    showToast(
+                        "English / Hinglish voice mode ON",
+                        "success"
+                    );
+
+                } else {
+
+                    paLanguage =
+                        "hindi";
+
+
+                    showToast(
+                        "Hindi voice mode ON",
+                        "success"
+                    );
+                }
+
+
+                updatePALanguageUI();
+            }
+        );
+
+
+        // =============================================
+        // PA RECOGNITION
+        // =============================================
+
+        setupPARecognition();
+
+
+        // =============================================
+        // PA MIC
+        // =============================================
+
+        paMicBtn?.addEventListener(
+            "click",
+            () => {
+
+                if (!paRecognition) {
+
+                    alert(
+                        "Voice input is not supported in this browser."
+                    );
+
+                    return;
+                }
+
+
+                if (paListening) {
+
+                    paRecognition.stop();
+
+                    return;
+                }
+
+
+                if (
+                    paLanguage ===
+                    "hindi"
+                ) {
+
+                    paRecognition.lang =
+                        "hi-IN";
+
+                } else {
+
+                    paRecognition.lang =
+                        "en-IN";
+                }
+
+
+                try {
+
+                    paRecognition.start();
+
+                } catch (error) {
+
+                    console.error(
+                        "MIC START ERROR:",
+                        error
+                    );
+                }
+            }
+        );
+
+
+        updatePALanguageUI();
+
+
+        // =============================================
+        // EXISTING SESSION
+        // =============================================
+
+        if (
+            currentUser &&
+            authToken
+        ) {
+
+            try {
+
+                await openNotebook();
+
+            } catch (error) {
+
+                console.error(
+                    "SESSION ERROR:",
+                    error
+                );
+
+
+                clearSession();
+
+                showLoginScreen();
+            }
+
+        } else {
+
+            showLoginScreen();
+        }
+    }
+);
+    

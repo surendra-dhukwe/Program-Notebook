@@ -484,6 +484,15 @@
 
         </button>
 
+        <button
+  id="adminNavBtn"
+  class="nav-btn hidden"
+  data-page="admin"
+  type="button"
+>
+  <span>👑</span>
+  Owner Panel
+</button>
 
       </nav>
 
@@ -1534,6 +1543,89 @@
 
       </section>
 
+      <section
+  id="adminPage"
+  class="page"
+>
+
+  <div class="page-intro">
+
+    <span class="eyebrow">
+      OWNER CONTROL PANEL
+    </span>
+
+    <h1>
+      Admin Dashboard 👑
+    </h1>
+
+    <p>
+      Manage users, notebooks and notes.
+    </p>
+
+  </div>
+
+
+  <div class="admin-stats">
+
+    <div class="stat-card">
+
+      <span>
+        TOTAL USERS
+      </span>
+
+      <strong id="adminUserCount">
+        0
+      </strong>
+
+    </div>
+
+
+    <div class="stat-card">
+
+      <span>
+        TOTAL NOTES
+      </span>
+
+      <strong id="adminNoteCount">
+        0
+      </strong>
+
+    </div>
+
+  </div>
+
+
+  <div
+    id="adminUserList"
+    class="admin-user-list"
+  ></div>
+
+
+  <div
+    id="adminNotesArea"
+    class="admin-notes-area"
+  >
+
+    <div class="empty-state">
+
+      <div>
+        👈
+      </div>
+
+      <h3>
+        Select a User
+      </h3>
+
+      <p>
+        User ki notebook aur posts yahan dikhenge.
+      </p>
+
+    </div>
+
+  </div>
+
+</section>
+
 
     </main>
 
@@ -1618,6 +1710,19 @@
         </small>
 
       </button>
+
+      <!-- YAHAN ADD KARO -->
+  <button
+    id="adminMobileNavBtn"
+    class="nav-btn hidden"
+    data-page="admin"
+    type="button"
+  >
+    <span>👑</span>
+    <small>Owner</small>
+  </button>
+
+</div>
 
 
     </div>

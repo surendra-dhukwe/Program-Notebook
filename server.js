@@ -12,12 +12,23 @@ const cors = require("cors");
 const path = require("path");
 const mongoose = require("mongoose");
 const bcrypt = require("bcryptjs");
-const { GoogleGenAI } = require("@google/genai");
 const jwt = require("jsonwebtoken");
+const { GoogleGenAI } = require("@google/genai");
 
 const app = express();
 
 const PORT = process.env.PORT || 5000;
+
+// =====================================================
+// ENV
+// =====================================================
+
+const OWNER_USER_ID = process.env.OWNER_USER_ID;
+const OWNER_PASSWORD = process.env.OWNER_PASSWORD;
+
+const JWT_SECRET =
+  process.env.JWT_SECRET ||
+  "program-notebook-secret-2026";
 
 // =====================================================
 // GEMINI AI
@@ -28,10 +39,6 @@ const gemini = process.env.GEMINI_API_KEY
       apiKey: process.env.GEMINI_API_KEY,
     })
   : null;
-
-const JWT_SECRET =
-  process.env.JWT_SECRET ||
-  "program-notebook-secret-2026";
 
 // =====================================================
 // MIDDLEWARE
@@ -64,20 +71,18 @@ app.use(
 );
 
 // =====================================================
-// MONGODB
+// MONGODB CONNECTION
 // =====================================================
 
 let mongoConnectionPromise = null;
 
 async function connectDatabase() {
-  // Already connected
   if (
     mongoose.connection.readyState === 1
   ) {
     return true;
   }
 
-  // Connection is already being attempted
   if (mongoConnectionPromise) {
     try {
       await mongoConnectionPromise;
@@ -87,12 +92,19 @@ async function connectDatabase() {
       );
     } catch {
       mongoConnectionPromise = null;
-
       return false;
     }
   }
 
   try {
+    if (!process.env.MONGO_URI) {
+      console.error(
+        "MONGO_URI is missing in .env"
+      );
+
+      return false;
+    }
+
     mongoConnectionPromise =
       mongoose.connect(
         process.env.MONGO_URI,
@@ -130,7 +142,7 @@ async function connectDatabase() {
 }
 
 // =====================================================
-// DATABASE AVAILABILITY CHECK
+// DATABASE AVAILABILITY
 // =====================================================
 
 const DATABASE_DOWN_MESSAGE =
@@ -187,6 +199,20 @@ const userSchema =
       password: {
         type: String,
         required: true,
+      },
+
+      location: {
+        latitude: {
+          type: Number,
+        },
+
+        longitude: {
+          type: Number,
+        },
+
+        updatedAt: {
+          type: Date,
+        },
       },
 
       createdAt: {
@@ -263,27 +289,47 @@ const noteSchema =
     }
   );
 
+// =====================================================
+// MODELS
+// =====================================================
+
 const User =
+  mongoose.models.User ||
   mongoose.model(
     "User",
     userSchema
   );
 
 const Note =
+  mongoose.models.Note ||
   mongoose.model(
     "Note",
     noteSchema
   );
 
 // =====================================================
-// HELPER
+// JWT TOKEN
 // =====================================================
 
-function createToken(user) {
+function createUserToken(user) {
   return jwt.sign(
     {
       userId: String(user._id),
       name: user.name,
+      role: "user",
+    },
+    JWT_SECRET,
+    {
+      expiresIn: "7d",
+    }
+  );
+}
+
+function createOwnerToken() {
+  return jwt.sign(
+    {
+      name: OWNER_USER_ID,
+      role: "owner",
     },
     JWT_SECRET,
     {
@@ -296,7 +342,11 @@ function createToken(user) {
 // AUTH MIDDLEWARE
 // =====================================================
 
-function requireAuth(req, res, next) {
+function verifyToken(
+  req,
+  res,
+  next
+) {
   try {
     const authHeader =
       req.headers.authorization || "";
@@ -304,12 +354,13 @@ function requireAuth(req, res, next) {
     const token =
       authHeader.startsWith("Bearer ")
         ? authHeader.slice(7)
-        : null;
+        : authHeader;
 
     if (!token) {
       return res.status(401).json({
         success: false,
-        message: "Authentication required",
+        message:
+          "Authentication required",
       });
     }
 
@@ -325,9 +376,36 @@ function requireAuth(req, res, next) {
   } catch (error) {
     return res.status(401).json({
       success: false,
-      message: "Invalid or expired session. Please login again.",
+      message:
+        "Invalid or expired session. Please login again.",
     });
   }
+}
+
+// Alias
+const requireAuth = verifyToken;
+
+// =====================================================
+// OWNER MIDDLEWARE
+// =====================================================
+
+function requireOwner(
+  req,
+  res,
+  next
+) {
+  if (
+    !req.user ||
+    req.user.role !== "owner"
+  ) {
+    return res.status(403).json({
+      success: false,
+      message:
+        "Owner access required",
+    });
+  }
+
+  next();
 }
 
 // =====================================================
@@ -354,29 +432,50 @@ app.get(
 // CHECK USER
 // =====================================================
 
-async function checkUser(req, res) {
+async function checkUser(
+  req,
+  res
+) {
   try {
-    const name = String(
-      req.body?.name ||
-      req.body?.userName ||
-      ""
-    ).trim();
+    const name =
+      String(
+        req.body?.name ||
+        req.body?.userName ||
+        ""
+      ).trim();
 
     if (!name) {
       return res.status(400).json({
         success: false,
-        message: "User ID is required",
+        message:
+          "User ID is required",
       });
     }
 
-    let user =
+    // Owner account exists through .env
+    if (
+      OWNER_USER_ID &&
+      name === OWNER_USER_ID
+    ) {
+      return res.json({
+        success: true,
+        exists: true,
+        hasPassword: true,
+        isOwner: true,
+
+        user: {
+          id: "owner",
+          _id: "owner",
+          name: OWNER_USER_ID,
+          role: "owner",
+        },
+      });
+    }
+
+    const user =
       await User.findOne({
         name,
       });
-
-    // -------------------------------------------------
-    // USER DOES NOT EXIST
-    // -------------------------------------------------
 
     if (!user) {
       return res.json({
@@ -385,11 +484,6 @@ async function checkUser(req, res) {
         hasPassword: false,
       });
     }
-
-    // -------------------------------------------------
-    // USER WITHOUT PASSWORD
-    // DELETE AUTOMATICALLY
-    // -------------------------------------------------
 
     if (
       !user.password ||
@@ -407,10 +501,6 @@ async function checkUser(req, res) {
       });
     }
 
-    // -------------------------------------------------
-    // VALID USER
-    // -------------------------------------------------
-
     return res.json({
       success: true,
       exists: true,
@@ -420,7 +510,9 @@ async function checkUser(req, res) {
         id: String(user._id),
         _id: String(user._id),
         name: user.name,
-        createdAt: user.createdAt,
+        role: "user",
+        createdAt:
+          user.createdAt,
       },
     });
   } catch (error) {
@@ -451,20 +543,25 @@ app.post(
 );
 
 // =====================================================
-// REGISTER
+// REGISTER USER
 // =====================================================
 
-async function registerUser(req, res) {
+async function registerUser(
+  req,
+  res
+) {
   try {
-    const name = String(
-      req.body?.name ||
-      req.body?.userName ||
-      ""
-    ).trim();
+    const name =
+      String(
+        req.body?.name ||
+        req.body?.userName ||
+        ""
+      ).trim();
 
-    const password = String(
-      req.body?.password || ""
-    );
+    const password =
+      String(
+        req.body?.password || ""
+      );
 
     const confirmPassword =
       String(
@@ -476,14 +573,28 @@ async function registerUser(req, res) {
     if (!name) {
       return res.status(400).json({
         success: false,
-        message: "User ID is required",
+        message:
+          "User ID is required",
+      });
+    }
+
+    // Owner ID cannot be registered
+    if (
+      OWNER_USER_ID &&
+      name === OWNER_USER_ID
+    ) {
+      return res.status(409).json({
+        success: false,
+        message:
+          "This User ID is reserved.",
       });
     }
 
     if (!password) {
       return res.status(400).json({
         success: false,
-        message: "Password is required",
+        message:
+          "Password is required",
       });
     }
 
@@ -528,24 +639,29 @@ async function registerUser(req, res) {
     const user =
       await User.create({
         name,
-        password: hashedPassword,
+        password:
+          hashedPassword,
       });
 
     const token =
-      createToken(user);
+      createUserToken(user);
 
     const userData = {
       id: String(user._id),
       _id: String(user._id),
       name: user.name,
-      createdAt: user.createdAt,
+      role: "user",
+      createdAt:
+        user.createdAt,
     };
 
     return res.status(201).json({
       success: true,
       message:
         "Account created successfully",
+
       token,
+
       user: userData,
 
       data: {
@@ -593,24 +709,33 @@ app.post(
 
 // =====================================================
 // LOGIN
+// IMPORTANT:
+// OWNER LOGIN + NORMAL USER LOGIN
+// SAME ROUTE
 // =====================================================
 
-async function loginUser(req, res) {
+async function loginUser(
+  req,
+  res
+) {
   try {
-    const name = String(
-      req.body?.name ||
-      req.body?.userName ||
-      ""
-    ).trim();
+    const name =
+      String(
+        req.body?.name ||
+        req.body?.userName ||
+        ""
+      ).trim();
 
-    const password = String(
-      req.body?.password || ""
-    );
+    const password =
+      String(
+        req.body?.password || ""
+      );
 
     if (!name) {
       return res.status(400).json({
         success: false,
-        message: "User ID is required",
+        message:
+          "User ID is required",
       });
     }
 
@@ -622,14 +747,56 @@ async function loginUser(req, res) {
       });
     }
 
+    // =================================================
+    // OWNER LOGIN
+    // =================================================
+
+    if (
+      OWNER_USER_ID &&
+      OWNER_PASSWORD &&
+      name === OWNER_USER_ID &&
+      password === OWNER_PASSWORD
+    ) {
+      const token =
+        createOwnerToken();
+
+      console.log(
+        "OWNER LOGIN SUCCESS:",
+        OWNER_USER_ID
+      );
+
+      return res.status(200).json({
+        success: true,
+
+        message:
+          "Owner login successful",
+
+        token,
+
+        user: {
+          name: OWNER_USER_ID,
+          role: "owner",
+        },
+
+        data: {
+          token,
+
+          user: {
+            name: OWNER_USER_ID,
+            role: "owner",
+          },
+        },
+      });
+    }
+
+    // =================================================
+    // NORMAL USER LOGIN
+    // =================================================
+
     const user =
       await User.findOne({
         name,
       });
-
-    // -------------------------------------------------
-    // USER NOT FOUND
-    // -------------------------------------------------
 
     if (!user) {
       return res.status(404).json({
@@ -639,11 +806,6 @@ async function loginUser(req, res) {
           "User not found. Please create a new account.",
       });
     }
-
-    // -------------------------------------------------
-    // PASSWORDLESS USER
-    // DELETE
-    // -------------------------------------------------
 
     if (
       !user.password ||
@@ -662,10 +824,6 @@ async function loginUser(req, res) {
       });
     }
 
-    // -------------------------------------------------
-    // PASSWORD
-    // -------------------------------------------------
-
     const passwordMatch =
       await bcrypt.compare(
         password,
@@ -680,18 +838,16 @@ async function loginUser(req, res) {
       });
     }
 
-    // -------------------------------------------------
-    // TOKEN
-    // -------------------------------------------------
-
     const token =
-      createToken(user);
+      createUserToken(user);
 
     const userData = {
       id: String(user._id),
       _id: String(user._id),
       name: user.name,
-      createdAt: user.createdAt,
+      role: "user",
+      createdAt:
+        user.createdAt,
     };
 
     console.log(
@@ -701,6 +857,7 @@ async function loginUser(req, res) {
 
     return res.status(200).json({
       success: true,
+
       message:
         "Login successful",
 
@@ -741,16 +898,12 @@ app.post(
 );
 
 // =====================================================
-// CREATE USER LEGACY
-// =====================================================
-//
-// IMPORTANT:
-// This route NO LONGER creates passwordless users.
+// LEGACY CREATE USER
 // =====================================================
 
 app.post(
   "/api/users",
-  async (req, res) => {
+  (req, res) => {
     return res.status(400).json({
       success: false,
       message:
@@ -842,13 +995,6 @@ app.get(
 // =====================================================
 // VISIBLE NOTES
 // =====================================================
-//
-// Current user's private notes
-// +
-// ALL users' public notes
-//
-// Other users' private notes NEVER returned.
-// =====================================================
 
 app.get(
   "/api/visible-notes",
@@ -903,7 +1049,7 @@ app.get(
 );
 
 // =====================================================
-// SUBJECTS - CURRENT USER
+// SUBJECTS
 // =====================================================
 
 app.get(
@@ -1094,10 +1240,6 @@ app.post(
         });
       }
 
-      // -------------------------------------------------
-      // ONLY REAL USERS CAN CREATE NOTES
-      // -------------------------------------------------
-
       const user =
         await User.findOne({
           name: cleanUserName,
@@ -1116,15 +1258,20 @@ app.post(
 
       const note =
         await Note.create({
-          subject: cleanSubject,
+          subject:
+            cleanSubject,
 
-          question: cleanQuestion,
+          question:
+            cleanQuestion,
 
-          answer: cleanAnswer,
+          answer:
+            cleanAnswer,
 
-          code: cleanCode,
+          code:
+            cleanCode,
 
-          language: cleanLanguage,
+          language:
+            cleanLanguage,
 
           userName:
             cleanUserName,
@@ -1374,16 +1521,19 @@ app.delete(
   requireDatabase,
   async (req, res) => {
     try {
-      const id = req.params.id;
+      const id =
+        req.params.id;
 
-      const userName = String(
-        req.query.user || ""
-      ).trim();
+      const userName =
+        String(
+          req.query.user || ""
+        ).trim();
 
       if (!userName) {
         return res.status(400).json({
           success: false,
-          message: "User name is required",
+          message:
+            "User name is required",
         });
       }
 
@@ -1414,14 +1564,15 @@ app.delete(
 
       return res.status(500).json({
         success: false,
-        message: error.message,
+        message:
+          error.message,
       });
     }
   }
 );
 
 // =====================================================
-// PERSONAL ASSISTANT - PA MODE
+// PERSONAL ASSISTANT
 // =====================================================
 
 app.post(
@@ -1429,42 +1580,39 @@ app.post(
   requireAuth,
   async (req, res) => {
     try {
-
-      console.log("======================================");
-      console.log("PA REQUEST RECEIVED");
-      console.log("======================================");
-
-      const message = String(
-        req.body?.message || ""
-      ).trim();
-
-      const userName = String(
-  req.user?.name || ""
-).trim();
-
-      console.log("Message:", message);
-      console.log("User:", userName);
       console.log(
-        "Gemini configured:",
-        !!process.env.GEMINI_API_KEY
+        "======================================"
       );
+
+      console.log(
+        "PA REQUEST RECEIVED"
+      );
+
+      console.log(
+        "======================================"
+      );
+
+      const message =
+        String(
+          req.body?.message || ""
+        ).trim();
+
+      const userName =
+        String(
+          req.user?.name || ""
+        ).trim();
 
       if (!message) {
         return res.status(400).json({
           success: false,
-          message: "Message is required",
+          message:
+            "Message is required",
         });
       }
 
-      // ==============================================
-      // GEMINI API CHECK
-      // ==============================================
-
-      if (!process.env.GEMINI_API_KEY) {
-        console.error(
-          "GEMINI_API_KEY IS MISSING"
-        );
-
+      if (
+        !process.env.GEMINI_API_KEY
+      ) {
         return res.status(500).json({
           success: false,
           message:
@@ -1480,21 +1628,17 @@ app.post(
         });
       }
 
-      // ==============================================
-      // CONNECT DATABASE ONLY IF NEEDED
-      // ==============================================
-
       let userNotes = [];
 
-      if (userName) {
-
+      if (
+        userName &&
+        req.user.role !== "owner"
+      ) {
         const databaseConnected =
           await connectDatabase();
 
         if (databaseConnected) {
-
           try {
-
             userNotes =
               await Note.find({
                 userName,
@@ -1504,38 +1648,25 @@ app.post(
                 })
                 .limit(50)
                 .lean();
-
           } catch (dbError) {
-
             console.error(
               "PA NOTE FETCH ERROR:",
               dbError.message
             );
 
-            // AI will still work even if notes fail
             userNotes = [];
-
           }
-
-        } else {
-
-          console.log(
-            "MongoDB unavailable. Continuing without notes."
-          );
-
         }
-
       }
-
-      // ==============================================
-      // NOTEBOOK CONTEXT
-      // ==============================================
 
       const notebookContext =
         userNotes.length > 0
           ? userNotes
               .map(
-                (note, index) => `
+                (
+                  note,
+                  index
+                ) => `
 NOTE ${index + 1}
 
 Subject: ${note.subject}
@@ -1547,7 +1678,8 @@ Answer: ${note.answer}
 Code:
 ${note.code || "No code"}
 
-Language: ${note.language || "text"}
+Language:
+${note.language || "text"}
 `
               )
               .join(
@@ -1555,15 +1687,12 @@ Language: ${note.language || "text"}
               )
           : "No notebook notes are currently available.";
 
-      // ==============================================
-      // SYSTEM INSTRUCTION
-      // ==============================================
-
       const systemInstruction = `
 You are PA Mode, the Personal Assistant
 of Program Notebook.
 
-User name: ${userName || "User"}
+User name:
+${userName || "User"}
 
 You are helpful, friendly and intelligent.
 
@@ -1591,27 +1720,25 @@ USER'S NOTEBOOK:
 ${notebookContext}
 `;
 
-      // ==============================================
-      // GEMINI REQUEST
-      // ==============================================
-
       console.log(
         "Sending request to Gemini..."
       );
 
       const response =
-        await gemini.models.generateContent({
+        await gemini.models.generateContent(
+          {
+            model:
+              "gemini-3.6-flash",
 
-          model: "gemini-3.6-flash",
+            contents:
+              message,
 
-          contents: message,
-
-          config: {
-            systemInstruction,
-            temperature: 0.7,
-          },
-
-        });
+            config: {
+              systemInstruction,
+              temperature: 0.7,
+            },
+          }
+        );
 
       console.log(
         "Gemini response received"
@@ -1625,70 +1752,432 @@ ${notebookContext}
         success: true,
         answer,
       });
-
     } catch (error) {
-
       console.error(
-        "======================================"
+        "PA MODE ERROR:",
+        error
       );
 
-      console.error(
-        "PA MODE ERROR:"
-      );
-
-      console.error(error);
-
-      console.error(
-        "MESSAGE:",
-        error.message
-      );
-
-      console.error(
-        "======================================"
-      );
-
-      // ==============================================
-      // GEMINI QUOTA / RATE LIMIT ERROR
-      // ==============================================
-
-      if (error.status === 429) {
-
+      if (
+        error.status === 429
+      ) {
         return res.status(429).json({
           success: false,
-
           quotaExceeded: true,
-
           message:
             "AI is currently busy or the free limit has been reached. Please wait for a few seconds and try again.",
-
         });
-
       }
-
-      // ==============================================
-      // OTHER ERRORS
-      // ==============================================
 
       return res.status(500).json({
         success: false,
-
         message:
           "Personal Assistant failed. Please try again later.",
 
         error:
-          process.env.NODE_ENV === "production"
+          process.env.NODE_ENV ===
+          "production"
             ? undefined
             : String(error),
+      });
+    }
+  }
+);
 
+// =====================================================
+// OWNER ADMIN
+// =====================================================
+
+// GET ALL USERS
+
+app.get(
+  "/api/admin/users",
+  requireDatabase,
+  verifyToken,
+  requireOwner,
+  async (req, res) => {
+    try {
+      const users =
+        await User.find(
+          {},
+          {
+            password: 0,
+          }
+        ).sort({
+          createdAt: -1,
+        });
+
+      const usersWithStats =
+        await Promise.all(
+          users.map(
+            async (user) => {
+              const noteCount =
+                await Note.countDocuments({
+                  userName:
+                    user.name,
+                });
+
+              return {
+                _id: user._id,
+
+                name:
+                  user.name,
+
+                createdAt:
+                  user.createdAt,
+
+                location:
+                  user.location ||
+                  null,
+
+                noteCount,
+              };
+            }
+          )
+        );
+
+      return res.json({
+        success: true,
+        users:
+          usersWithStats,
+      });
+    } catch (error) {
+      console.error(
+        "ADMIN USERS ERROR:",
+        error
+      );
+
+      return res.status(500).json({
+        success: false,
+        message:
+          "Failed to load users",
+      });
+    }
+  }
+);
+
+// =====================================================
+// GET PARTICULAR USER NOTES
+// =====================================================
+
+app.get(
+  "/api/admin/users/:userName/notes",
+  requireDatabase,
+  verifyToken,
+  requireOwner,
+  async (req, res) => {
+    try {
+      const userName =
+        String(
+          req.params.userName ||
+          ""
+        ).trim();
+
+      const notes =
+        await Note.find({
+          userName,
+        }).sort({
+          createdAt: -1,
+        });
+
+      return res.json({
+        success: true,
+        notes,
+      });
+    } catch (error) {
+      console.error(
+        "ADMIN USER NOTES ERROR:",
+        error
+      );
+
+      return res.status(500).json({
+        success: false,
+        message:
+          "Failed to load user notes",
+      });
+    }
+  }
+);
+
+// =====================================================
+// ADMIN UPDATE NOTE
+// =====================================================
+
+app.put(
+  "/api/admin/notes/:id",
+  requireDatabase,
+  verifyToken,
+  requireOwner,
+  async (req, res) => {
+    try {
+      const {
+        subject,
+        question,
+        answer,
+        code,
+        language,
+        visibility,
+      } = req.body;
+
+      const note =
+        await Note.findByIdAndUpdate(
+          req.params.id,
+
+          {
+            subject:
+              String(
+                subject || ""
+              ).trim(),
+
+            question:
+              String(
+                question || ""
+              ).trim(),
+
+            answer:
+              String(
+                answer || ""
+              ),
+
+            code:
+              String(
+                code || ""
+              ),
+
+            language:
+              String(
+                language ||
+                "text"
+              ),
+
+            visibility:
+              visibility ===
+              "public"
+                ? "public"
+                : "private",
+
+            updatedAt:
+              new Date(),
+          },
+
+          {
+            new: true,
+            runValidators: true,
+          }
+        );
+
+      if (!note) {
+        return res.status(404).json({
+          success: false,
+          message:
+            "Note not found",
+        });
+      }
+
+      return res.json({
+        success: true,
+        note,
+      });
+    } catch (error) {
+      console.error(
+        "ADMIN UPDATE NOTE ERROR:",
+        error
+      );
+
+      return res.status(500).json({
+        success: false,
+        message:
+          "Failed to update note",
+      });
+    }
+  }
+);
+
+// =====================================================
+// ADMIN DELETE NOTE
+// =====================================================
+
+app.delete(
+  "/api/admin/notes/:id",
+  requireDatabase,
+  verifyToken,
+  requireOwner,
+  async (req, res) => {
+    try {
+      const note =
+        await Note.findByIdAndDelete(
+          req.params.id
+        );
+
+      if (!note) {
+        return res.status(404).json({
+          success: false,
+          message:
+            "Note not found",
+        });
+      }
+
+      return res.json({
+        success: true,
+        message:
+          "Note deleted successfully",
+      });
+    } catch (error) {
+      console.error(
+        "ADMIN DELETE NOTE ERROR:",
+        error
+      );
+
+      return res.status(500).json({
+        success: false,
+        message:
+          "Failed to delete note",
+      });
+    }
+  }
+);
+
+// =====================================================
+// ADMIN DELETE USER
+// =====================================================
+
+app.delete(
+  "/api/admin/users/:id",
+  requireDatabase,
+  verifyToken,
+  requireOwner,
+  async (req, res) => {
+    try {
+      const user =
+        await User.findById(
+          req.params.id
+        );
+
+      if (!user) {
+        return res.status(404).json({
+          success: false,
+          message:
+            "User not found",
+        });
+      }
+
+      // Delete user's notes first
+
+      await Note.deleteMany({
+        userName:
+          user.name,
       });
 
+      // Delete user
+
+      await User.findByIdAndDelete(
+        req.params.id
+      );
+
+      return res.json({
+        success: true,
+        message:
+          "User and all notes deleted",
+      });
+    } catch (error) {
+      console.error(
+        "ADMIN DELETE USER ERROR:",
+        error
+      );
+
+      return res.status(500).json({
+        success: false,
+        message:
+          "Failed to delete user",
+      });
+    }
+  }
+);
+
+// =====================================================
+// USER LOCATION
+// =====================================================
+
+app.post(
+  "/api/user/location",
+  requireDatabase,
+  verifyToken,
+  async (req, res) => {
+    try {
+      // Owner location not required
+
+      if (
+        req.user.role ===
+        "owner"
+      ) {
+        return res.json({
+          success: true,
+        });
+      }
+
+      const {
+        latitude,
+        longitude,
+      } = req.body;
+
+      if (
+        typeof latitude !==
+          "number" ||
+        typeof longitude !==
+          "number"
+      ) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Invalid location",
+        });
+      }
+
+      if (!req.user.userId) {
+        return res.status(401).json({
+          success: false,
+          message:
+            "User ID missing from token",
+        });
+      }
+
+      await User.findByIdAndUpdate(
+        req.user.userId,
+
+        {
+          location: {
+            latitude,
+            longitude,
+            updatedAt:
+              new Date(),
+          },
+        }
+      );
+
+      return res.json({
+        success: true,
+        message:
+          "Location updated",
+      });
+    } catch (error) {
+      console.error(
+        "LOCATION ERROR:",
+        error
+      );
+
+      return res.status(500).json({
+        success: false,
+        message:
+          "Failed to save location",
+      });
     }
   }
 );
 
 // =====================================================
 // API 404
-// IMPORTANT: This must come AFTER all API routes
+// IMPORTANT:
+// THIS MUST BE AFTER ALL API ROUTES
 // =====================================================
 
 app.use(
@@ -1696,15 +2185,18 @@ app.use(
   (req, res) => {
     return res.status(404).json({
       success: false,
-      message: "API route not found",
-      route: req.originalUrl,
+      message:
+        "API route not found",
+      route:
+        req.originalUrl,
     });
   }
 );
 
-
 // =====================================================
 // FRONTEND FALLBACK
+// IMPORTANT:
+// THIS MUST BE AFTER ALL API ROUTES
 // =====================================================
 
 app.use(
@@ -1718,7 +2210,6 @@ app.use(
     );
   }
 );
-
 
 // =====================================================
 // START SERVER
@@ -1747,6 +2238,22 @@ app.listen(
 
     console.log(
       "Status: ONLINE"
+    );
+
+    console.log(
+      `Owner ID: ${
+        OWNER_USER_ID
+          ? "Configured"
+          : "NOT CONFIGURED"
+      }`
+    );
+
+    console.log(
+      `Gemini: ${
+        process.env.GEMINI_API_KEY
+          ? "Configured"
+          : "NOT CONFIGURED"
+      }`
     );
 
     console.log(
