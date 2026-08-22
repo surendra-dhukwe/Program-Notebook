@@ -1968,7 +1968,6 @@ async function copyCurrentCode() {
     }
 }
 
-
 // =====================================================
 // SAVE / UPDATE NOTE
 // =====================================================
@@ -2024,6 +2023,10 @@ async function saveNote(event) {
         ).trim();
 
 
+    // =============================================
+    // CUSTOM LANGUAGE
+    // =============================================
+
     if (language === "Other") {
 
         language =
@@ -2047,9 +2050,17 @@ async function saveNote(event) {
     }
 
 
+    // =============================================
+    // VISIBILITY
+    // =============================================
+
     const visibility =
         getSelectedVisibility();
 
+
+    // =============================================
+    // VALIDATION
+    // =============================================
 
     if (
         !subject ||
@@ -2075,11 +2086,17 @@ async function saveNote(event) {
         button.disabled = true;
 
         button.innerHTML =
-            "SAVING... ⏳";
+            editingNoteId
+                ? "UPDATING... ⏳"
+                : "SAVING... ⏳";
     }
 
 
     try {
+
+        // =============================================
+        // NOTE DATA
+        // =============================================
 
         const noteData = {
 
@@ -2100,27 +2117,77 @@ async function saveNote(event) {
         };
 
 
+        // =============================================
+        // UPDATE EXISTING NOTE
+        // =============================================
+
         if (editingNoteId) {
 
-            await apiRequest(
-                `/notes/${editingNoteId}`,
-                {
-                    method: "PUT",
+            /*
+             * Owner Panel se edit ki gayi note ke liye
+             * admin endpoint use karo.
+             *
+             * Normal user ki own note ke liye
+             * normal /notes/:id endpoint use karo.
+             */
 
-                    body:
-                        JSON.stringify(
-                            noteData
-                        )
-                }
-            );
+            const isAdminEdit =
+                isOwner() &&
+                $("addPage")
+                    ?.querySelector(
+                        ".page-intro h1"
+                    )
+                    ?.textContent
+                    ?.startsWith(
+                        "Edit Note ("
+                    );
+
+
+            if (isAdminEdit) {
+
+                await apiRequest(
+                    `/admin/notes/${encodeURIComponent(
+                        editingNoteId
+                    )}`,
+                    {
+                        method: "PUT",
+
+                        body:
+                            JSON.stringify(
+                                noteData
+                            )
+                    }
+                );
+
+            } else {
+
+                await apiRequest(
+                    `/notes/${encodeURIComponent(
+                        editingNoteId
+                    )}`,
+                    {
+                        method: "PUT",
+
+                        body:
+                            JSON.stringify(
+                                noteData
+                            )
+                    }
+                );
+            }
 
 
             showToast(
-                "Note updated",
+                "Note updated successfully",
                 "success"
             );
 
+
         } else {
+
+            // =========================================
+            // CREATE NEW NOTE
+            // =========================================
 
             await apiRequest(
                 "/notes",
@@ -2136,11 +2203,15 @@ async function saveNote(event) {
 
 
             showToast(
-                "Note saved",
+                "Note saved successfully",
                 "success"
             );
         }
 
+
+        // =============================================
+        // RESET EDIT MODE
+        // =============================================
 
         editingNoteId =
             null;
@@ -2149,23 +2220,41 @@ async function saveNote(event) {
         clearNoteForm();
 
 
+        // =============================================
+        // RELOAD DATA
+        // =============================================
+
         await loadAllData();
 
 
-        showPage("notes");
+        // =============================================
+        // AFTER ADMIN EDIT
+        // =============================================
+
+        if (isOwner()) {
+
+            showPage("admin");
+
+        } else {
+
+            showPage("notes");
+        }
+
 
     } catch (error) {
 
         console.error(
-            "SAVE NOTE ERROR:",
+            "SAVE / UPDATE NOTE ERROR:",
             error
         );
 
 
         showToast(
-            error.message,
+            error.message ||
+            "Unable to save note",
             "error"
         );
+
 
     } finally {
 
@@ -2178,7 +2267,6 @@ async function saveNote(event) {
         }
     }
 }
-
 
 // =====================================================
 // VISIBILITY
@@ -3642,15 +3730,11 @@ ${escapeHTML(note.code)}
     `;
 }
 
-
 // =====================================================
 // ADMIN - EDIT NOTE
 // =====================================================
 
-async function editAdminNote(
-    noteId,
-    userName
-) {
+async function editAdminNote(noteId, userName) {
 
     if (!isOwner()) {
 
@@ -3662,19 +3746,41 @@ async function editAdminNote(
         return;
     }
 
-try {
+    try {
+
+        // =============================================
+        // Get user's notes from the same API that is
+        // already working in openAdminUser()
+        // =============================================
 
         const data =
             await apiRequest(
-                `/admin/notes/${encodeURIComponent(
-                    noteId
-                )}`
+                `/admin/users/${encodeURIComponent(
+                    userName
+                )}/notes`
             );
 
 
+        const notes =
+            Array.isArray(data.notes)
+                ? data.notes
+                : [];
+
+
+        // =============================================
+        // Find selected note
+        // =============================================
+
         const note =
-            data.note ||
-            data;
+            notes.find(
+                item =>
+                    String(
+                        item._id ||
+                        item.id ||
+                        ""
+                    ) ===
+                    String(noteId)
+            );
 
 
         if (!note) {
@@ -3686,7 +3792,7 @@ try {
 
 
         // =============================================
-        // Open normal add/edit form
+        // Set editing ID
         // =============================================
 
         editingNoteId =
@@ -3694,8 +3800,16 @@ try {
             note.id;
 
 
+        // =============================================
+        // Open Add/Edit page
+        // =============================================
+
         showPage("add");
 
+
+        // =============================================
+        // SUBJECT
+        // =============================================
 
         if ($("subjectInput")) {
 
@@ -3704,12 +3818,20 @@ try {
         }
 
 
+        // =============================================
+        // QUESTION
+        // =============================================
+
         if ($("questionInput")) {
 
             $("questionInput").value =
                 note.question || "";
         }
 
+
+        // =============================================
+        // ANSWER
+        // =============================================
 
         if ($("answerInput")) {
 
@@ -3718,12 +3840,20 @@ try {
         }
 
 
+        // =============================================
+        // CODE
+        // =============================================
+
         if ($("codeInput")) {
 
             $("codeInput").value =
                 note.code || "";
         }
 
+
+        // =============================================
+        // LANGUAGE
+        // =============================================
 
         if ($("languageInput")) {
 
@@ -3750,6 +3880,20 @@ try {
                 $("languageInput").value =
                     savedLanguage;
 
+
+                if ($("customLanguage")) {
+
+                    $("customLanguage")
+                        .style
+                        .display =
+                        "none";
+
+                    $("customLanguage")
+                        .value =
+                        "";
+
+                }
+
             } else {
 
                 $("languageInput").value =
@@ -3771,29 +3915,52 @@ try {
         }
 
 
+        // =============================================
+        // VISIBILITY
+        // =============================================
+
         if (
             note.visibility ===
             "public"
         ) {
 
-            $("publicOption").checked =
-                true;
+            if ($("publicOption")) {
 
-            $("privateOption").checked =
-                false;
+                $("publicOption").checked =
+                    true;
+            }
+
+
+            if ($("privateOption")) {
+
+                $("privateOption").checked =
+                    false;
+            }
 
         } else {
 
-            $("privateOption").checked =
-                true;
+            if ($("privateOption")) {
 
-            $("publicOption").checked =
-                false;
+                $("privateOption").checked =
+                    true;
+            }
+
+
+            if ($("publicOption")) {
+
+                $("publicOption").checked =
+                    false;
+            }
         }
 
 
+        // Update hidden visibility input
         getSelectedVisibility();
 
+
+        // =============================================
+        // PAGE TITLE
+        // =============================================
 
         const title =
             $("addPage")
@@ -3809,6 +3976,10 @@ try {
         }
 
 
+        // =============================================
+        // UPDATE BUTTON
+        // =============================================
+
         if ($("saveNoteBtn")) {
 
             $("saveNoteBtn").innerHTML =
@@ -3816,10 +3987,15 @@ try {
         }
 
 
+        // =============================================
+        // SUCCESS
+        // =============================================
+
         showToast(
             "Note loaded for editing",
             "success"
         );
+
 
     } catch (error) {
 
@@ -3836,7 +4012,6 @@ try {
         );
     }
 }
-
 
 // =====================================================
 // ADMIN - DELETE NOTE
