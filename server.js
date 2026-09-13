@@ -15,6 +15,11 @@ const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const { GoogleGenAI } = require("@google/genai");
 
+const fs = require("fs");
+const os = require("os");
+const crypto = require("crypto");
+const { spawn } = require("child_process");
+
 const app = express();
 
 const PORT = process.env.PORT || 5000;
@@ -69,6 +74,632 @@ app.use(
     path.join(__dirname, "public")
   )
 );
+
+app.use(
+  express.static(
+    path.join(__dirname, "public")
+  )
+);
+
+// =====================================================
+// CODE RUNNER HELPERS
+// =====================================================
+
+const CODE_RUN_TIMEOUT = 8000; // 8 seconds
+
+
+function createTempDirectory() {
+  const folder = path.join(
+    os.tmpdir(),
+    "program-notebook-" +
+      crypto.randomBytes(12).toString("hex")
+  );
+
+  fs.mkdirSync(folder, {
+    recursive: true,
+  });
+
+  return folder;
+}
+
+
+function removeTempDirectory(folder) {
+  try {
+    fs.rmSync(folder, {
+      recursive: true,
+      force: true,
+    });
+  } catch (error) {
+    console.error(
+      "TEMP CLEANUP ERROR:",
+      error.message
+    );
+  }
+}
+
+
+function runProcess(
+  command,
+  args,
+  options = {}
+) {
+  return new Promise((resolve) => {
+
+    const timeout =
+      options.timeout ||
+      CODE_RUN_TIMEOUT;
+
+    let stdout = "";
+    let stderr = "";
+    let finished = false;
+
+    const child = spawn(
+      command,
+      args,
+      {
+        cwd: options.cwd,
+        shell: false,
+        windowsHide: true,
+      }
+    );
+
+
+    const timer =
+      setTimeout(() => {
+
+        if (finished) return;
+
+        finished = true;
+
+        try {
+          child.kill("SIGKILL");
+        } catch {}
+
+        resolve({
+          success: false,
+          stdout,
+          stderr:
+            stderr ||
+            "Program execution timed out."
+        });
+
+      }, timeout);
+
+
+    child.stdout.on(
+      "data",
+      (data) => {
+        stdout += data.toString();
+      }
+    );
+
+
+    child.stderr.on(
+      "data",
+      (data) => {
+        stderr += data.toString();
+      }
+    );
+
+
+    child.on(
+      "error",
+      (error) => {
+
+        if (finished) return;
+
+        finished = true;
+
+        clearTimeout(timer);
+
+        resolve({
+          success: false,
+          stdout,
+          stderr:
+            error.message
+        });
+      }
+    );
+
+
+    child.on(
+      "close",
+      (code) => {
+
+        if (finished) return;
+
+        finished = true;
+
+        clearTimeout(timer);
+
+        resolve({
+          success:
+            code === 0,
+
+          stdout,
+
+          stderr,
+
+          exitCode:
+            code
+        });
+      }
+    );
+
+
+    if (options.input) {
+
+      child.stdin.write(
+        String(options.input)
+      );
+    }
+
+    child.stdin.end();
+  });
+}
+
+
+// =====================================================
+// CODE LANGUAGE NORMALIZER
+// =====================================================
+
+function normalizeCodeLanguage(language) {
+
+  const value =
+    String(language || "")
+      .trim()
+      .toLowerCase();
+
+  const map = {
+
+    // C
+    "c": "c",
+
+    // C++
+    "c++": "cpp",
+    "cpp": "cpp",
+
+    // Python
+    "python": "python",
+    "py": "python",
+
+    // Java
+    "java": "java",
+
+    // JavaScript
+    "javascript": "javascript",
+    "js": "javascript",
+
+    // PHP
+    "php": "php",
+
+    // C#
+    "c#": "csharp",
+    "csharp": "csharp",
+
+    // Go
+    "go": "go",
+
+    // Rust
+    "rust": "rust",
+
+  };
+
+  return map[value] || null;
+}
+
+// =====================================================
+// CODE RUNNER
+// =====================================================
+
+async function executeCode({
+  code,
+  language,
+  input = "",
+}) {
+
+  const cleanLanguage =
+    normalizeCodeLanguage(
+      language
+    );
+
+
+  if (!cleanLanguage) {
+
+    return {
+      success: false,
+      output:
+        "Unsupported programming language."
+    };
+  }
+
+
+  if (
+    !code ||
+    !String(code).trim()
+  ) {
+
+    return {
+      success: false,
+      output:
+        "Code is empty."
+    };
+  }
+
+
+  const tempDir =
+    createTempDirectory();
+
+
+  try {
+
+    // =================================================
+    // C
+    // =================================================
+
+    if (cleanLanguage === "c") {
+
+      const sourceFile =
+        path.join(
+          tempDir,
+          "main.c"
+        );
+
+      const outputFile =
+        path.join(
+          tempDir,
+          process.platform === "win32"
+            ? "main.exe"
+            : "main"
+        );
+
+
+      fs.writeFileSync(
+        sourceFile,
+        String(code),
+        "utf8"
+      );
+
+
+      const compile =
+        await runProcess(
+          "gcc",
+          [
+            sourceFile,
+            "-o",
+            outputFile
+          ],
+          {
+            cwd: tempDir,
+            timeout: 10000,
+          }
+        );
+
+
+      if (!compile.success) {
+
+        return {
+          success: false,
+          output:
+            compile.stderr ||
+            "C compilation failed."
+        };
+      }
+
+
+      const result =
+        await runProcess(
+          outputFile,
+          [],
+          {
+            cwd: tempDir,
+            input,
+            timeout:
+              CODE_RUN_TIMEOUT,
+          }
+        );
+
+
+      return {
+        success:
+          result.success,
+
+        output:
+          result.stdout ||
+          result.stderr ||
+          "Program finished."
+      };
+    }
+
+
+    // =================================================
+    // C++
+    // =================================================
+
+    if (
+      cleanLanguage === "cpp"
+    ) {
+
+      const sourceFile =
+        path.join(
+          tempDir,
+          "main.cpp"
+        );
+
+      const outputFile =
+        path.join(
+          tempDir,
+          process.platform === "win32"
+            ? "main.exe"
+            : "main"
+        );
+
+
+      fs.writeFileSync(
+        sourceFile,
+        String(code),
+        "utf8"
+      );
+
+
+      const compile =
+        await runProcess(
+          "g++",
+          [
+            sourceFile,
+            "-o",
+            outputFile
+          ],
+          {
+            cwd: tempDir,
+            timeout: 10000,
+          }
+        );
+
+
+      if (!compile.success) {
+
+        return {
+          success: false,
+          output:
+            compile.stderr ||
+            "C++ compilation failed."
+        };
+      }
+
+
+      const result =
+        await runProcess(
+          outputFile,
+          [],
+          {
+            cwd: tempDir,
+            input,
+            timeout:
+              CODE_RUN_TIMEOUT,
+          }
+        );
+
+
+      return {
+        success:
+          result.success,
+
+        output:
+          result.stdout ||
+          result.stderr ||
+          "Program finished."
+      };
+    }
+
+
+    // =================================================
+    // PYTHON
+    // =================================================
+
+    if (
+      cleanLanguage === "python"
+    ) {
+
+      const sourceFile =
+        path.join(
+          tempDir,
+          "main.py"
+        );
+
+
+      fs.writeFileSync(
+        sourceFile,
+        String(code),
+        "utf8"
+      );
+
+
+      const pythonCommand =
+        process.platform === "win32"
+          ? "python"
+          : "python3";
+
+
+      const result =
+        await runProcess(
+          pythonCommand,
+          [
+            sourceFile
+          ],
+          {
+            cwd: tempDir,
+            input,
+            timeout:
+              CODE_RUN_TIMEOUT,
+          }
+        );
+
+
+      return {
+        success:
+          result.success,
+
+        output:
+          result.stdout ||
+          result.stderr ||
+          "Program finished."
+      };
+    }
+
+
+    // =================================================
+    // JAVA
+    // =================================================
+
+    if (
+      cleanLanguage === "java"
+    ) {
+
+      const sourceFile =
+        path.join(
+          tempDir,
+          "Main.java"
+        );
+
+
+      fs.writeFileSync(
+        sourceFile,
+        String(code),
+        "utf8"
+      );
+
+
+      const compile =
+        await runProcess(
+          "javac",
+          [
+            sourceFile
+          ],
+          {
+            cwd: tempDir,
+            timeout: 10000,
+          }
+        );
+
+
+      if (!compile.success) {
+
+        return {
+          success: false,
+          output:
+            compile.stderr ||
+            "Java compilation failed."
+        };
+      }
+
+
+      const result =
+        await runProcess(
+          "java",
+          [
+            "-cp",
+            tempDir,
+            "Main"
+          ],
+          {
+            cwd: tempDir,
+            input,
+            timeout:
+              CODE_RUN_TIMEOUT,
+          }
+        );
+
+
+      return {
+        success:
+          result.success,
+
+        output:
+          result.stdout ||
+          result.stderr ||
+          "Program finished."
+      };
+    }
+
+
+    // =================================================
+    // JAVASCRIPT
+    // =================================================
+
+    if (
+      cleanLanguage ===
+      "javascript"
+    ) {
+
+      const sourceFile =
+        path.join(
+          tempDir,
+          "main.js"
+        );
+
+
+      fs.writeFileSync(
+        sourceFile,
+        String(code),
+        "utf8"
+      );
+
+
+      const result =
+        await runProcess(
+          process.execPath,
+          [
+            sourceFile
+          ],
+          {
+            cwd: tempDir,
+            input,
+            timeout:
+              CODE_RUN_TIMEOUT,
+          }
+        );
+
+
+      return {
+        success:
+          result.success,
+
+        output:
+          result.stdout ||
+          result.stderr ||
+          "Program finished."
+      };
+    }
+
+
+    return {
+      success: false,
+      output:
+        "This language is not supported yet."
+    };
+
+  } catch (error) {
+
+    console.error(
+      "CODE EXECUTION ERROR:",
+      error
+    );
+
+    return {
+      success: false,
+      output:
+        error.message ||
+        "Code execution failed."
+    };
+
+  } finally {
+
+    removeTempDirectory(
+      tempDir
+    );
+  }
+}
 
 // =====================================================
 // MONGODB CONNECTION
@@ -2116,9 +2747,9 @@ app.post(
       }
 
       const {
-        latitude,
-        longitude,
-      } = req.body;
+  latitude,
+  longitude
+} = req.body;
 
       if (
         typeof latitude !==
@@ -2169,6 +2800,92 @@ app.post(
         success: false,
         message:
           "Failed to save location",
+      });
+    }
+  }
+);
+// =====================================================
+// RUN CODE
+// MUST BE BEFORE API 404
+// =====================================================
+
+app.post(
+  "/api/code/run",
+  async (req, res) => {
+
+    try {
+
+      const {
+        code,
+        language,
+        input = "",
+      } = req.body || {};
+
+
+      if (
+        !code ||
+        !String(code).trim()
+      ) {
+
+        return res.status(400).json({
+          success: false,
+          output:
+            "Code is empty.",
+        });
+      }
+
+
+      if (
+        String(code).length >
+        100000
+      ) {
+
+        return res.status(400).json({
+          success: false,
+          output:
+            "Code is too large. Maximum 100 KB allowed.",
+        });
+      }
+
+
+      const result =
+        await executeCode({
+          code,
+          language,
+          input,
+        });
+
+
+      return res.status(
+        result.success
+          ? 200
+          : 400
+      ).json({
+
+        success:
+          result.success,
+
+        output:
+          result.output || "",
+
+      });
+
+    } catch (error) {
+
+      console.error(
+        "RUN CODE API ERROR:",
+        error
+      );
+
+
+      return res.status(500).json({
+
+        success: false,
+
+        output:
+          error.message ||
+          "Unable to run code.",
+
       });
     }
   }

@@ -191,9 +191,11 @@ async function apiRequest(endpoint, options = {}) {
 
 
         throw new Error(
-            data.message ||
-            `Request failed (${response.status})`
-        );
+    data.message ||
+    data.output ||
+    data.error ||
+    `Request failed (${response.status})`
+);
     }
 
 
@@ -1966,6 +1968,1594 @@ async function copyCurrentCode() {
             "error"
         );
     }
+}
+
+// =====================================================
+// CODE RUNNER + CODE UPLOAD
+// =====================================================
+
+const CODE_RUN_LANGUAGES = [
+    "C",
+    "C++",
+    "Python",
+    "Java",
+    "JavaScript",
+    "TypeScript",
+    "PHP",
+    "Go",
+    "Rust"
+];
+
+
+// =====================================================
+// GET SELECTED RUN LANGUAGE
+// =====================================================
+
+function getRunLanguage() {
+
+    // First priority: Run language dropdown
+    const runLanguageSelect =
+        $("runLanguageSelect");
+
+    if (runLanguageSelect) {
+
+        const selected =
+            String(
+                runLanguageSelect.value || ""
+            ).trim();
+
+        if (selected) {
+            return selected;
+        }
+    }
+
+
+    // Second priority: Existing language selector
+    let language =
+        String(
+            $("languageInput")?.value || ""
+        ).trim();
+
+
+    // Custom language
+    if (
+        language === "Other" &&
+        $("customLanguage")
+    ) {
+
+        language =
+            String(
+                $("customLanguage").value || ""
+            ).trim();
+    }
+
+
+    // Return existing language
+    if (
+        language &&
+        language.toLowerCase() !== "text" &&
+        language.toLowerCase() !== "plaintext"
+    ) {
+
+        return language;
+    }
+
+
+    // Default language
+    return "C";
+}
+
+
+// =====================================================
+// NORMALIZE LANGUAGE
+// =====================================================
+
+function normalizeRunLanguage(language) {
+
+    const value =
+        String(
+            language || ""
+        )
+            .trim()
+            .toLowerCase();
+
+    const map = {
+
+        "c": "c",
+
+        "c++": "cpp",
+        "cpp": "cpp",
+
+        "python": "python",
+        "py": "python",
+
+        "java": "java",
+
+        "javascript": "javascript",
+        "js": "javascript",
+
+        "typescript": "typescript",
+        "ts": "typescript",
+
+        "php": "php",
+
+        "go": "go",
+        "golang": "go",
+
+        "rust": "rust",
+        "rs": "rust"
+    };
+
+    return map[value] || value;
+}
+
+
+// =====================================================
+// SHOW CODE OUTPUT
+// =====================================================
+
+function showCodeOutput(
+    output,
+    type = "normal"
+) {
+
+    let outputBox =
+        $("codeRunOutput");
+
+    // Create output box automatically
+    if (!outputBox) {
+
+        outputBox =
+            document.createElement("div");
+
+        outputBox.id =
+            "codeRunOutput";
+
+        outputBox.className =
+            "code-run-output";
+
+        const codeInput =
+            $("codeInput");
+
+        if (codeInput) {
+
+            const parent =
+                codeInput.parentElement;
+
+            parent?.appendChild(
+                outputBox
+            );
+        }
+    }
+
+    if (!outputBox) return;
+
+    outputBox.classList.remove(
+        "hidden"
+    );
+
+    outputBox.classList.remove(
+        "success",
+        "error"
+    );
+
+    outputBox.classList.add(
+        type === "error"
+            ? "error"
+            : "success"
+    );
+
+    outputBox.innerHTML = `
+        <div class="code-output-title">
+            OUTPUT
+        </div>
+
+        <pre>${escapeHTML(
+            String(output ?? "")
+        )}</pre>
+    `;
+}
+
+
+// =====================================================
+// RUN JAVASCRIPT DIRECTLY IN BROWSER
+// =====================================================
+
+function runJavaScriptCode(code) {
+
+    return new Promise(resolve => {
+
+        try {
+
+            const logs = [];
+
+            const originalLog =
+                console.log;
+
+            const originalError =
+                console.error;
+
+            console.log = (...args) => {
+
+                logs.push(
+                    args
+                        .map(
+                            item =>
+                                typeof item === "object"
+                                    ? JSON.stringify(item)
+                                    : String(item)
+                        )
+                        .join(" ")
+                );
+            };
+
+            console.error = (...args) => {
+
+                logs.push(
+                    args
+                        .map(String)
+                        .join(" ")
+                );
+            };
+
+            // Execute code
+            const result =
+                Function(
+                    `"use strict";\n${code}`
+                )();
+
+            console.log =
+                originalLog;
+
+            console.error =
+                originalError;
+
+            if (
+                result !== undefined
+            ) {
+
+                logs.push(
+                    String(result)
+                );
+            }
+
+            resolve({
+                success: true,
+                output:
+                    logs.join("\n") ||
+                    "Program executed successfully."
+            });
+
+        } catch (error) {
+
+            console.log =
+                console.log;
+
+            resolve({
+                success: false,
+                output:
+                    error?.message ||
+                    String(error)
+            });
+        }
+    });
+}
+
+// =====================================================
+// CODE INPUT DETECTION
+// =====================================================
+
+function codeNeedsInput(code, language) {
+
+    const lang = normalizeRunLanguage(language);
+    const source = String(code || "");
+
+    if (lang === "c" || lang === "cpp") {
+        return (
+            /\bscanf\s*\(/.test(source) ||
+            /\bcin\s*>>/.test(source) ||
+            /\bgetline\s*\(/.test(source) ||
+            /\bgetchar\s*\(/.test(source)
+        );
+    }
+
+    if (lang === "python") {
+        return /\binput\s*\(/.test(source);
+    }
+
+    if (lang === "java") {
+        return (
+            /\bScanner\b/.test(source) ||
+            /\.next(Int|Line|Double|Float|Long)\s*\(/.test(source) ||
+            /\.readLine\s*\(/.test(source)
+        );
+    }
+
+    if (lang === "javascript") {
+        return /\bprompt\s*\(/.test(source);
+    }
+
+    if (lang === "php") {
+        return (
+            /fgets\s*\(\s*STDIN/.test(source) ||
+            /\breadline\s*\(/.test(source)
+        );
+    }
+
+    if (lang === "go") {
+        return (
+            /\bfmt\.Scan/.test(source) ||
+            /\.ReadString\s*\(/.test(source)
+        );
+    }
+
+    if (lang === "rust") {
+        return /read_line\s*\(/.test(source);
+    }
+
+    return false;
+}
+
+
+// =====================================================
+// CREATE INPUT BOX
+// =====================================================
+
+function showCodeInputBox(language) {
+
+    let inputBox = $("codeRunInput");
+
+    if (!inputBox) {
+
+        inputBox = document.createElement("div");
+
+        inputBox.id = "codeRunInput";
+
+        inputBox.className = "code-run-input";
+
+        const codeInput = $("codeInput");
+
+        if (codeInput?.parentElement) {
+            codeInput.parentElement.appendChild(inputBox);
+        }
+    }
+
+    inputBox.classList.remove("hidden");
+
+    inputBox.innerHTML = `
+        <div class="code-output-title">
+            INPUT
+        </div>
+
+        <div style="
+            font-size:13px;
+            opacity:.75;
+            margin:6px 0 10px;
+        ">
+            This program requires input.
+            Enter one or more values below.
+        </div>
+
+        <textarea
+            id="programInput"
+            rows="4"
+            placeholder="Example:
+10
+
+For multiple inputs:
+10
+20
+30"
+            style="
+                width:100%;
+                resize:vertical;
+                box-sizing:border-box;
+                padding:12px;
+                border-radius:10px;
+                border:1px solid rgba(255,255,255,.12);
+                background:#080d18;
+                color:#fff;
+                outline:none;
+                font-family:monospace;
+            "
+        ></textarea>
+
+        <button
+            type="button"
+            id="runWithInputBtn"
+            class="soft-btn"
+            style="margin-top:10px;"
+        >
+            ▶ Run Program
+        </button>
+    `;
+
+    $("runWithInputBtn")?.addEventListener(
+        "click",
+        () => {
+
+            const input =
+                String(
+                    $("programInput")?.value || ""
+                );
+
+            runCurrentCode(
+                null,
+                language,
+                "add",
+                input
+            );
+        }
+    );
+
+    $("programInput")?.focus();
+}
+
+
+// =====================================================
+// HIDE INPUT BOX
+// =====================================================
+
+function hideCodeInputBox() {
+
+    $("codeRunInput")
+        ?.classList
+        .add("hidden");
+}
+
+
+// =====================================================
+// RUN CURRENT CODE
+// =====================================================
+
+async function runCurrentCode(
+    codeOverride = null,
+    languageOverride = null,
+    outputTarget = "add",
+    inputOverride = null
+) {
+
+    const code =
+        codeOverride !== null
+            ? String(codeOverride)
+            : String(
+                $("codeInput")?.value || ""
+            );
+
+
+    if (!code.trim()) {
+
+        showToast(
+            "Please write or upload code first",
+            "error"
+        );
+
+        return;
+    }
+
+
+    let language =
+        languageOverride ||
+        getRunLanguage();
+
+
+    if (!language) {
+
+        showToast(
+            "Please select the programming language",
+            "error"
+        );
+
+        return;
+    }
+
+
+    const normalizedLanguage =
+        normalizeRunLanguage(language);
+
+
+    // =============================================
+    // CHECK INPUT
+    // =============================================
+
+    if (
+        inputOverride === null &&
+        codeNeedsInput(
+            code,
+            normalizedLanguage
+        )
+    ) {
+
+        showCodeInputBox(
+            normalizedLanguage
+        );
+
+        return;
+    }
+
+
+    // =============================================
+    // JAVASCRIPT
+    // =============================================
+
+    if (
+        normalizedLanguage ===
+        "javascript"
+    ) {
+
+        const result =
+            await runJavaScriptCode(
+                code
+            );
+
+        showCodeOutput(
+            result.output,
+            result.success
+                ? "success"
+                : "error"
+        );
+
+        return;
+    }
+
+
+    // =============================================
+    // BACKEND EXECUTION
+    // =============================================
+
+    const runButtons =
+        document.querySelectorAll(
+            ".code-run-btn"
+        );
+
+
+    runButtons.forEach(
+        button => {
+
+            button.disabled = true;
+
+            button.innerHTML =
+                "⏳ Running...";
+        }
+    );
+
+
+    try {
+
+        const data =
+            await apiRequest(
+                "/code/run",
+                {
+                    method: "POST",
+
+                    body:
+                        JSON.stringify({
+
+                            code,
+
+                            language:
+                                normalizedLanguage,
+
+                            input:
+                                inputOverride || ""
+                        })
+                }
+            );
+
+
+        const output =
+            data.output ??
+            data.stdout ??
+            data.result ??
+            data.message ??
+            "";
+
+
+        hideCodeInputBox();
+
+
+        showCodeOutput(
+            output,
+            data.success === false
+                ? "error"
+                : "success"
+        );
+
+
+    } catch (error) {
+
+        console.error(
+            "CODE RUN ERROR:",
+            error
+        );
+
+
+        showCodeOutput(
+            error.message ||
+            "Unable to run code.",
+            "error"
+        );
+
+
+    } finally {
+
+        runButtons.forEach(
+            button => {
+
+                button.disabled =
+                    false;
+
+                button.innerHTML =
+                    "▶ Run";
+            }
+        );
+    }
+}
+
+
+// =====================================================
+// RUN CURRENT CODE
+// =====================================================
+
+// async function runCurrentCode(
+//     codeOverride = null,
+//     languageOverride = null,
+//     outputTarget = "add"
+// ) {
+
+//     const code =
+//         codeOverride !== null
+//             ? String(codeOverride)
+//             : String(
+//                 $("codeInput")?.value || ""
+//             );
+
+//     if (!code.trim()) {
+
+//         showToast(
+//             "Please write or upload code first",
+//             "error"
+//         );
+
+//         return;
+//     }
+
+
+//     let language =
+//         languageOverride ||
+//         getRunLanguage();
+
+
+//     if (!language) {
+
+//         showToast(
+//             "Please select the programming language",
+//             "error"
+//         );
+
+//         return;
+//     }
+
+
+//     const normalizedLanguage =
+//         normalizeRunLanguage(
+//             language
+//         );
+
+
+//     // =============================================
+//     // JAVASCRIPT
+//     // =============================================
+
+//     if (
+//         normalizedLanguage ===
+//         "javascript"
+//     ) {
+
+//         const result =
+//             await runJavaScriptCode(
+//                 code
+//             );
+
+//         showCodeOutput(
+//             result.output,
+//             result.success
+//                 ? "success"
+//                 : "error"
+//         );
+
+//         return;
+//     }
+
+
+//     // =============================================
+//     // OTHER LANGUAGES
+//     // BACKEND EXECUTION
+//     // =============================================
+
+//     const runButtons =
+//         document.querySelectorAll(
+//             ".code-run-btn"
+//         );
+
+//     runButtons.forEach(
+//         button => {
+//             button.disabled = true;
+//             button.innerHTML =
+//                 "⏳ Running...";
+//         }
+//     );
+
+
+//     try {
+
+//         const data =
+//             await apiRequest(
+//                 "/code/run",
+//                 {
+//                     method: "POST",
+
+//                     body:
+//                         JSON.stringify({
+//                             code,
+//                             language:
+//                                 normalizedLanguage
+//                         })
+//                 }
+//             );
+
+
+//         const output =
+//             data.output ??
+//             data.stdout ??
+//             data.result ??
+//             data.message ??
+//             "";
+
+
+//         showCodeOutput(
+//             output,
+//             data.success === false
+//                 ? "error"
+//                 : "success"
+//         );
+
+
+//     } catch (error) {
+
+//         console.error(
+//             "CODE RUN ERROR:",
+//             error
+//         );
+
+//         showCodeOutput(
+//             error.message ||
+//             "Unable to run code.",
+//             "error"
+//         );
+
+//     } finally {
+
+//         runButtons.forEach(
+//             button => {
+
+//                 button.disabled =
+//                     false;
+
+//                 button.innerHTML =
+//                     "▶ Run";
+//             }
+//         );
+//     }
+// }
+
+
+// =====================================================
+// UPLOAD CODE FILE
+// =====================================================
+
+async function handleCodeUpload(
+    event
+) {
+
+    const file =
+        event.target.files?.[0];
+
+    if (!file) return;
+
+
+    const extension =
+        file.name
+            .split(".")
+            .pop()
+            .toLowerCase();
+
+
+    const extensionLanguage = {
+
+        c: "C",
+
+        h: "C",
+
+        cpp: "C++",
+
+        cc: "C++",
+
+        cxx: "C++",
+
+        py: "Python",
+
+        java: "Java",
+
+        js: "JavaScript",
+
+        mjs: "JavaScript",
+
+        ts: "TypeScript",
+
+        php: "PHP",
+
+        go: "Go",
+
+        rs: "Rust"
+    };
+
+
+    const detectedLanguage =
+        extensionLanguage[
+            extension
+        ];
+
+
+    try {
+
+        const code =
+            await file.text();
+
+
+        if ($("codeInput")) {
+
+            $("codeInput").value =
+                code;
+        }
+
+
+        // Automatically select detected language
+        if (
+            detectedLanguage &&
+            $("languageInput")
+        ) {
+
+            const options =
+                Array.from(
+                    $("languageInput").options
+                );
+
+            const matched =
+                options.find(
+                    option =>
+                        option.value.toLowerCase() ===
+                        detectedLanguage.toLowerCase()
+                );
+
+
+            if (matched) {
+
+                $("languageInput").value =
+                    matched.value;
+
+                $("customLanguage") &&
+                    (
+                        $("customLanguage").style.display =
+                            "none"
+                    );
+
+            } else {
+
+                $("languageInput").value =
+                    "Other";
+
+                if ($("customLanguage")) {
+
+                    $("customLanguage").style.display =
+                        "block";
+
+                    $("customLanguage").value =
+                        detectedLanguage;
+                }
+            }
+        }
+
+
+        showToast(
+            detectedLanguage
+                ? `Code uploaded — ${detectedLanguage} detected`
+                : "Code uploaded successfully",
+            "success"
+        );
+
+
+        // Show run button
+        ensureCodeRunnerUI();
+
+
+    } catch (error) {
+
+        console.error(
+            "CODE UPLOAD ERROR:",
+            error
+        );
+
+        showToast(
+            "Unable to read code file",
+            "error"
+        );
+    }
+
+
+    // Allow same file to be selected again
+    event.target.value = "";
+}
+
+
+// =====================================================
+// CREATE RUN / UPLOAD BUTTONS
+// =====================================================
+
+function ensureCodeRunnerUI() {
+
+    const codeInput =
+        $("codeInput");
+
+
+    if (codeInput) {
+
+        let tools =
+            $("codeEditorTools");
+
+
+        if (!tools) {
+
+            tools =
+                document.createElement(
+                    "div"
+                );
+
+            tools.id =
+                "codeEditorTools";
+
+            tools.className =
+                "code-editor-tools";
+
+            // =====================================
+// LANGUAGE SELECTOR
+// =====================================
+
+const languageSelect =
+    document.createElement("select");
+
+languageSelect.id =
+    "runLanguageSelect";
+
+languageSelect.className =
+    "soft-btn code-language-select";
+
+languageSelect.title =
+    "Select programming language";
+
+
+// Add languages
+CODE_RUN_LANGUAGES.forEach(
+    language => {
+
+        const option =
+            document.createElement("option");
+
+        option.value =
+            normalizeRunLanguage(
+                language
+            );
+
+        option.textContent =
+            language;
+
+        languageSelect.appendChild(
+            option
+        );
+    }
+);
+
+
+// Use currently selected language
+const existingLanguage =
+    String(
+        $("languageInput")?.value || ""
+    ).trim();
+
+
+if (existingLanguage) {
+
+    const normalized =
+        normalizeRunLanguage(
+            existingLanguage
+        );
+
+    const exists =
+        Array.from(
+            languageSelect.options
+        ).some(
+            option =>
+                option.value === normalized
+        );
+
+    if (exists) {
+        languageSelect.value =
+            normalized;
+    }
+}
+
+
+// Change language
+languageSelect.addEventListener(
+    "change",
+    () => {
+
+        const selected =
+            languageSelect.value;
+
+
+        // Also update existing language selector
+        const languageInput =
+            $("languageInput");
+
+
+        if (languageInput) {
+
+            const option =
+                Array.from(
+                    languageInput.options
+                ).find(
+                    item =>
+                        normalizeRunLanguage(
+                            item.value
+                        ) === selected
+                );
+
+
+            if (option) {
+                languageInput.value =
+                    option.value;
+            }
+        }
+
+
+        // Clear previous output
+        $("codeRunOutput")
+            ?.classList
+            .add("hidden");
+
+
+        $("codeRunInput")
+            ?.classList
+            .add("hidden");
+    }
+);
+
+            // =====================================
+            // RUN BUTTON
+            // =====================================
+
+            const runButton =
+                document.createElement(
+                    "button"
+                );
+
+            runButton.type =
+                "button";
+
+            runButton.id =
+                "runCodeBtn";
+
+            runButton.className =
+                "soft-btn code-run-btn";
+
+            runButton.innerHTML =
+                "▶ Run";
+
+            runButton.addEventListener(
+                "click",
+                () =>
+                    runCurrentCode()
+            );
+
+
+            // =====================================
+            // UPLOAD BUTTON
+            // =====================================
+
+            const uploadButton =
+                document.createElement(
+                    "button"
+                );
+
+            uploadButton.type =
+                "button";
+
+            uploadButton.className =
+                "soft-btn";
+
+            uploadButton.innerHTML =
+                "📁 Upload Code";
+
+
+            const fileInput =
+                document.createElement(
+                    "input"
+                );
+
+            fileInput.type =
+                "file";
+
+            fileInput.id =
+                "codeFileInput";
+
+            fileInput.accept =
+                ".c,.h,.cpp,.cc,.cxx,.py,.java,.js,.mjs,.ts,.php,.go,.rs,.txt";
+
+            fileInput.style.display =
+                "none";
+
+
+            fileInput.addEventListener(
+                "change",
+                handleCodeUpload
+            );
+
+
+            uploadButton.addEventListener(
+                "click",
+                () =>
+                    fileInput.click()
+            );
+
+
+            tools.appendChild(
+    languageSelect
+);
+
+tools.appendChild(
+    runButton
+);
+
+tools.appendChild(
+    uploadButton
+);
+
+            tools.appendChild(
+                fileInput
+            );
+
+
+            codeInput.parentElement
+                ?.appendChild(tools);
+        }
+    }
+
+
+    // =============================================
+    // READER RUN BUTTON
+    // =============================================
+
+    const copyButton =
+        $("copyCode");
+
+
+    if (
+        copyButton &&
+        !$("readerRunCode")
+    ) {
+
+        const readerRun =
+            document.createElement(
+                "button"
+            );
+
+        readerRun.type =
+            "button";
+
+        readerRun.id =
+            "readerRunCode";
+
+        readerRun.className =
+            copyButton.className ||
+            "soft-btn";
+
+        readerRun.innerHTML =
+            "▶ Run";
+
+        readerRun.addEventListener(
+            "click",
+            async () => {
+
+                const note =
+                    readerNotes[
+                        readerIndex
+                    ];
+
+                if (!note?.code) {
+
+                    showToast(
+                        "No code available",
+                        "error"
+                    );
+
+                    return;
+                }
+
+
+                const result =
+                    await runReaderCode(
+                        note.code,
+                        note.language
+                    );
+
+                showReaderOutput(
+                    result.output,
+                    result.success
+                );
+            }
+        );
+
+
+        copyButton.parentElement
+            ?.insertBefore(
+                readerRun,
+                copyButton.nextSibling
+            );
+    }
+}
+
+
+// =====================================================
+// RUN CODE FROM READER
+// =====================================================
+
+async function runReaderCode(
+    code,
+    language,
+    inputOverride = null
+) {
+
+    const normalizedLanguage =
+        normalizeRunLanguage(language);
+
+
+    // =============================================
+    // INPUT REQUIRED
+    // =============================================
+
+    if (
+        inputOverride === null &&
+        codeNeedsInput(
+            code,
+            normalizedLanguage
+        )
+    ) {
+
+        showReaderInputBox(
+            code,
+            language
+        );
+
+        return {
+            success: true,
+            output: ""
+        };
+    }
+
+
+    // =============================================
+    // JAVASCRIPT
+    // =============================================
+
+    if (
+        normalizedLanguage ===
+        "javascript"
+    ) {
+
+        return await runJavaScriptCode(
+            code
+        );
+    }
+
+
+    try {
+
+        const data =
+            await apiRequest(
+                "/code/run",
+                {
+                    method: "POST",
+
+                    body:
+                        JSON.stringify({
+
+                            code,
+
+                            language:
+                                normalizedLanguage,
+
+                            input:
+                                inputOverride || ""
+                        })
+                }
+            );
+
+
+        return {
+
+            success:
+                data.success !== false,
+
+            output:
+                data.output ??
+                data.stdout ??
+                data.result ??
+                data.message ??
+                ""
+        };
+
+
+    } catch (error) {
+
+        return {
+
+            success: false,
+
+            output:
+                error.message ||
+                "Unable to run code."
+        };
+    }
+}
+
+function showReaderInputBox(
+    code,
+    language
+) {
+
+    const codeWrap =
+        $("readerCodeWrap");
+
+    if (!codeWrap) return;
+
+
+    let inputBox =
+        $("readerCodeInput");
+
+
+    if (!inputBox) {
+
+        inputBox =
+            document.createElement(
+                "div"
+            );
+
+        inputBox.id =
+            "readerCodeInput";
+
+        inputBox.className =
+            "code-run-output";
+
+        codeWrap.appendChild(
+            inputBox
+        );
+    }
+
+
+    inputBox.classList.remove(
+        "hidden"
+    );
+
+
+    inputBox.innerHTML = `
+        <div class="code-output-title">
+            INPUT
+        </div>
+
+        <textarea
+            id="readerProgramInput"
+            rows="4"
+            placeholder="Enter program input..."
+            style="
+                width:100%;
+                box-sizing:border-box;
+                margin-top:10px;
+                padding:12px;
+                border-radius:10px;
+                background:#080d18;
+                color:#fff;
+                border:1px solid rgba(255,255,255,.12);
+                font-family:monospace;
+                resize:vertical;
+            "
+        ></textarea>
+
+        <button
+            type="button"
+            id="readerRunInputBtn"
+            class="soft-btn"
+            style="margin-top:10px;"
+        >
+            ▶ Run Program
+        </button>
+    `;
+
+
+    $("readerRunInputBtn")
+        ?.addEventListener(
+            "click",
+            async () => {
+
+                const input =
+                    String(
+                        $("readerProgramInput")
+                            ?.value || ""
+                    );
+
+
+                const result =
+                    await runReaderCode(
+                        code,
+                        language,
+                        input
+                    );
+
+
+                inputBox
+                    .classList
+                    .add("hidden");
+
+
+                showReaderOutput(
+                    result.output,
+                    result.success
+                );
+            }
+        );
+
+
+    $("readerProgramInput")
+        ?.focus();
+}
+
+// async function runReaderCode(
+//     code,
+//     language
+// ) {
+
+//     const normalizedLanguage =
+//         normalizeRunLanguage(
+//             language
+//         );
+
+
+//     if (
+//         normalizedLanguage ===
+//         "javascript"
+//     ) {
+
+//         return await runJavaScriptCode(
+//             code
+//         );
+//     }
+
+
+//     try {
+
+//         const data =
+//             await apiRequest(
+//                 "/code/run",
+//                 {
+//                     method: "POST",
+
+//                     body:
+//                         JSON.stringify({
+//                             code,
+//                             language:
+//                                 normalizedLanguage
+//                         })
+//                 }
+//             );
+
+
+//         return {
+
+//             success:
+//                 data.success !== false,
+
+//             output:
+//                 data.output ??
+//                 data.stdout ??
+//                 data.result ??
+//                 data.message ??
+//                 ""
+//         };
+
+//     } catch (error) {
+
+//         return {
+
+//             success: false,
+
+//             output:
+//                 error.message ||
+//                 "Unable to run code."
+//         };
+//     }
+// }
+
+
+// =====================================================
+// READER OUTPUT
+// =====================================================
+
+function showReaderOutput(
+    output,
+    success = true
+) {
+
+    const codeWrap =
+        $("readerCodeWrap");
+
+    if (!codeWrap) return;
+
+
+    let outputBox =
+        $("readerCodeOutput");
+
+
+    if (!outputBox) {
+
+        outputBox =
+            document.createElement(
+                "div"
+            );
+
+        outputBox.id =
+            "readerCodeOutput";
+
+        outputBox.className =
+            "code-run-output";
+
+        codeWrap.appendChild(
+            outputBox
+        );
+    }
+
+
+    outputBox.classList.remove(
+        "hidden",
+        "success",
+        "error"
+    );
+
+    outputBox.classList.add(
+        success
+            ? "success"
+            : "error"
+    );
+
+
+    outputBox.innerHTML = `
+        <div class="code-output-title">
+            OUTPUT
+        </div>
+
+        <pre>${escapeHTML(
+            String(output ?? "")
+        )}</pre>
+    `;
 }
 
 // =====================================================
@@ -5100,6 +6690,11 @@ document.addEventListener(
                 copyCurrentCode
             );
 
+        // =============================================
+// CODE RUNNER UI
+// =============================================
+
+ensureCodeRunnerUI();
 
         $("editNote")
             ?.addEventListener(
