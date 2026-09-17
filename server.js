@@ -82,626 +82,6 @@ app.use(
 );
 
 // =====================================================
-// CODE RUNNER HELPERS
-// =====================================================
-
-const CODE_RUN_TIMEOUT = 8000; // 8 seconds
-
-
-function createTempDirectory() {
-  const folder = path.join(
-    os.tmpdir(),
-    "program-notebook-" +
-      crypto.randomBytes(12).toString("hex")
-  );
-
-  fs.mkdirSync(folder, {
-    recursive: true,
-  });
-
-  return folder;
-}
-
-
-function removeTempDirectory(folder) {
-  try {
-    fs.rmSync(folder, {
-      recursive: true,
-      force: true,
-    });
-  } catch (error) {
-    console.error(
-      "TEMP CLEANUP ERROR:",
-      error.message
-    );
-  }
-}
-
-
-function runProcess(
-  command,
-  args,
-  options = {}
-) {
-  return new Promise((resolve) => {
-
-    const timeout =
-      options.timeout ||
-      CODE_RUN_TIMEOUT;
-
-    let stdout = "";
-    let stderr = "";
-    let finished = false;
-
-    const child = spawn(
-      command,
-      args,
-      {
-        cwd: options.cwd,
-        shell: false,
-        windowsHide: true,
-      }
-    );
-
-
-    const timer =
-      setTimeout(() => {
-
-        if (finished) return;
-
-        finished = true;
-
-        try {
-          child.kill("SIGKILL");
-        } catch {}
-
-        resolve({
-          success: false,
-          stdout,
-          stderr:
-            stderr ||
-            "Program execution timed out."
-        });
-
-      }, timeout);
-
-
-    child.stdout.on(
-      "data",
-      (data) => {
-        stdout += data.toString();
-      }
-    );
-
-
-    child.stderr.on(
-      "data",
-      (data) => {
-        stderr += data.toString();
-      }
-    );
-
-
-    child.on(
-      "error",
-      (error) => {
-
-        if (finished) return;
-
-        finished = true;
-
-        clearTimeout(timer);
-
-        resolve({
-          success: false,
-          stdout,
-          stderr:
-            error.message
-        });
-      }
-    );
-
-
-    child.on(
-      "close",
-      (code) => {
-
-        if (finished) return;
-
-        finished = true;
-
-        clearTimeout(timer);
-
-        resolve({
-          success:
-            code === 0,
-
-          stdout,
-
-          stderr,
-
-          exitCode:
-            code
-        });
-      }
-    );
-
-
-    if (options.input) {
-
-      child.stdin.write(
-        String(options.input)
-      );
-    }
-
-    child.stdin.end();
-  });
-}
-
-
-// =====================================================
-// CODE LANGUAGE NORMALIZER
-// =====================================================
-
-function normalizeCodeLanguage(language) {
-
-  const value =
-    String(language || "")
-      .trim()
-      .toLowerCase();
-
-  const map = {
-
-    // C
-    "c": "c",
-
-    // C++
-    "c++": "cpp",
-    "cpp": "cpp",
-
-    // Python
-    "python": "python",
-    "py": "python",
-
-    // Java
-    "java": "java",
-
-    // JavaScript
-    "javascript": "javascript",
-    "js": "javascript",
-
-    // PHP
-    "php": "php",
-
-    // C#
-    "c#": "csharp",
-    "csharp": "csharp",
-
-    // Go
-    "go": "go",
-
-    // Rust
-    "rust": "rust",
-
-  };
-
-  return map[value] || null;
-}
-
-// =====================================================
-// CODE RUNNER
-// =====================================================
-
-async function executeCode({
-  code,
-  language,
-  input = "",
-}) {
-
-  const cleanLanguage =
-    normalizeCodeLanguage(
-      language
-    );
-
-
-  if (!cleanLanguage) {
-
-    return {
-      success: false,
-      output:
-        "Unsupported programming language."
-    };
-  }
-
-
-  if (
-    !code ||
-    !String(code).trim()
-  ) {
-
-    return {
-      success: false,
-      output:
-        "Code is empty."
-    };
-  }
-
-
-  const tempDir =
-    createTempDirectory();
-
-
-  try {
-
-    // =================================================
-    // C
-    // =================================================
-
-    if (cleanLanguage === "c") {
-
-      const sourceFile =
-        path.join(
-          tempDir,
-          "main.c"
-        );
-
-      const outputFile =
-        path.join(
-          tempDir,
-          process.platform === "win32"
-            ? "main.exe"
-            : "main"
-        );
-
-
-      fs.writeFileSync(
-        sourceFile,
-        String(code),
-        "utf8"
-      );
-
-
-      const compile =
-        await runProcess(
-          "gcc",
-          [
-            sourceFile,
-            "-o",
-            outputFile
-          ],
-          {
-            cwd: tempDir,
-            timeout: 10000,
-          }
-        );
-
-
-      if (!compile.success) {
-
-        return {
-          success: false,
-          output:
-            compile.stderr ||
-            "C compilation failed."
-        };
-      }
-
-
-      const result =
-        await runProcess(
-          outputFile,
-          [],
-          {
-            cwd: tempDir,
-            input,
-            timeout:
-              CODE_RUN_TIMEOUT,
-          }
-        );
-
-
-      return {
-        success:
-          result.success,
-
-        output:
-          result.stdout ||
-          result.stderr ||
-          "Program finished."
-      };
-    }
-
-
-    // =================================================
-    // C++
-    // =================================================
-
-    if (
-      cleanLanguage === "cpp"
-    ) {
-
-      const sourceFile =
-        path.join(
-          tempDir,
-          "main.cpp"
-        );
-
-      const outputFile =
-        path.join(
-          tempDir,
-          process.platform === "win32"
-            ? "main.exe"
-            : "main"
-        );
-
-
-      fs.writeFileSync(
-        sourceFile,
-        String(code),
-        "utf8"
-      );
-
-
-      const compile =
-        await runProcess(
-          "g++",
-          [
-            sourceFile,
-            "-o",
-            outputFile
-          ],
-          {
-            cwd: tempDir,
-            timeout: 10000,
-          }
-        );
-
-
-      if (!compile.success) {
-
-        return {
-          success: false,
-          output:
-            compile.stderr ||
-            "C++ compilation failed."
-        };
-      }
-
-
-      const result =
-        await runProcess(
-          outputFile,
-          [],
-          {
-            cwd: tempDir,
-            input,
-            timeout:
-              CODE_RUN_TIMEOUT,
-          }
-        );
-
-
-      return {
-        success:
-          result.success,
-
-        output:
-          result.stdout ||
-          result.stderr ||
-          "Program finished."
-      };
-    }
-
-
-    // =================================================
-    // PYTHON
-    // =================================================
-
-    if (
-      cleanLanguage === "python"
-    ) {
-
-      const sourceFile =
-        path.join(
-          tempDir,
-          "main.py"
-        );
-
-
-      fs.writeFileSync(
-        sourceFile,
-        String(code),
-        "utf8"
-      );
-
-
-      const pythonCommand =
-        process.platform === "win32"
-          ? "python"
-          : "python3";
-
-
-      const result =
-        await runProcess(
-          pythonCommand,
-          [
-            sourceFile
-          ],
-          {
-            cwd: tempDir,
-            input,
-            timeout:
-              CODE_RUN_TIMEOUT,
-          }
-        );
-
-
-      return {
-        success:
-          result.success,
-
-        output:
-          result.stdout ||
-          result.stderr ||
-          "Program finished."
-      };
-    }
-
-
-    // =================================================
-    // JAVA
-    // =================================================
-
-    if (
-      cleanLanguage === "java"
-    ) {
-
-      const sourceFile =
-        path.join(
-          tempDir,
-          "Main.java"
-        );
-
-
-      fs.writeFileSync(
-        sourceFile,
-        String(code),
-        "utf8"
-      );
-
-
-      const compile =
-        await runProcess(
-          "javac",
-          [
-            sourceFile
-          ],
-          {
-            cwd: tempDir,
-            timeout: 10000,
-          }
-        );
-
-
-      if (!compile.success) {
-
-        return {
-          success: false,
-          output:
-            compile.stderr ||
-            "Java compilation failed."
-        };
-      }
-
-
-      const result =
-        await runProcess(
-          "java",
-          [
-            "-cp",
-            tempDir,
-            "Main"
-          ],
-          {
-            cwd: tempDir,
-            input,
-            timeout:
-              CODE_RUN_TIMEOUT,
-          }
-        );
-
-
-      return {
-        success:
-          result.success,
-
-        output:
-          result.stdout ||
-          result.stderr ||
-          "Program finished."
-      };
-    }
-
-
-    // =================================================
-    // JAVASCRIPT
-    // =================================================
-
-    if (
-      cleanLanguage ===
-      "javascript"
-    ) {
-
-      const sourceFile =
-        path.join(
-          tempDir,
-          "main.js"
-        );
-
-
-      fs.writeFileSync(
-        sourceFile,
-        String(code),
-        "utf8"
-      );
-
-
-      const result =
-        await runProcess(
-          process.execPath,
-          [
-            sourceFile
-          ],
-          {
-            cwd: tempDir,
-            input,
-            timeout:
-              CODE_RUN_TIMEOUT,
-          }
-        );
-
-
-      return {
-        success:
-          result.success,
-
-        output:
-          result.stdout ||
-          result.stderr ||
-          "Program finished."
-      };
-    }
-
-
-    return {
-      success: false,
-      output:
-        "This language is not supported yet."
-    };
-
-  } catch (error) {
-
-    console.error(
-      "CODE EXECUTION ERROR:",
-      error
-    );
-
-    return {
-      success: false,
-      output:
-        error.message ||
-        "Code execution failed."
-    };
-
-  } finally {
-
-    removeTempDirectory(
-      tempDir
-    );
-  }
-}
-
-// =====================================================
 // MONGODB CONNECTION
 // =====================================================
 
@@ -2804,6 +2184,459 @@ app.post(
     }
   }
 );
+
+// =====================================================
+// CODE RUNNER - JUDGE0
+// VERCEL SAFE VERSION
+// =====================================================
+
+const JUDGE0_URL =
+  process.env.JUDGE0_URL ||
+  "https://ce.judge0.com";
+
+const JUDGE0_TOKEN =
+  process.env.JUDGE0_TOKEN || "";
+
+const CODE_RUN_TIMEOUT = 15000;
+
+
+// =====================================================
+// LANGUAGE NORMALIZER
+// =====================================================
+
+function normalizeCodeLanguage(language) {
+  const value = String(language || "")
+    .trim()
+    .toLowerCase();
+
+  const map = {
+    c: "c",
+
+    "c++": "cpp",
+    cpp: "cpp",
+
+    python: "python",
+    py: "python",
+
+    java: "java",
+
+    javascript: "javascript",
+    js: "javascript",
+
+    php: "php",
+
+    "c#": "csharp",
+    csharp: "csharp",
+
+    go: "go",
+
+    rust: "rust",
+  };
+
+  return map[value] || null;
+}
+
+
+// =====================================================
+// JUDGE0 LANGUAGE IDs
+// =====================================================
+
+const JUDGE0_LANGUAGE_IDS = {
+  c: 50,
+  cpp: 54,
+  csharp: 51,
+  java: 62,
+  javascript: 63,
+  python: 71,
+  php: 68,
+  go: 60,
+  rust: 73,
+};
+
+
+// =====================================================
+// SLEEP
+// =====================================================
+
+function sleep(ms) {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+}
+
+
+// =====================================================
+// JUDGE0 REQUEST HEADERS
+// =====================================================
+
+function getJudge0Headers() {
+  const headers = {
+    "Content-Type": "application/json",
+  };
+
+  if (JUDGE0_TOKEN) {
+    headers["X-Auth-Token"] =
+      JUDGE0_TOKEN;
+  }
+
+  return headers;
+}
+
+
+// =====================================================
+// RUN CODE USING JUDGE0
+// =====================================================
+
+async function executeCode({
+  code,
+  language,
+  input = "",
+}) {
+
+  const cleanLanguage =
+    normalizeCodeLanguage(language);
+
+
+  // ---------------------------------------------------
+  // LANGUAGE CHECK
+  // ---------------------------------------------------
+
+  if (!cleanLanguage) {
+    return {
+      success: false,
+      output:
+        "Unsupported programming language.",
+    };
+  }
+
+
+  // ---------------------------------------------------
+  // CODE CHECK
+  // ---------------------------------------------------
+
+  if (
+    !code ||
+    !String(code).trim()
+  ) {
+    return {
+      success: false,
+      output: "Code is empty.",
+    };
+  }
+
+
+  // ---------------------------------------------------
+  // SIZE LIMIT
+  // ---------------------------------------------------
+
+  if (
+    String(code).length >
+    100000
+  ) {
+    return {
+      success: false,
+      output:
+        "Code is too large. Maximum 100 KB allowed.",
+    };
+  }
+
+
+  // ---------------------------------------------------
+  // INPUT LIMIT
+  // ---------------------------------------------------
+
+  if (
+    String(input).length >
+    50000
+  ) {
+    return {
+      success: false,
+      output:
+        "Input is too large. Maximum 50 KB allowed.",
+    };
+  }
+
+
+  const languageId =
+    JUDGE0_LANGUAGE_IDS[
+      cleanLanguage
+    ];
+
+
+  if (!languageId) {
+    return {
+      success: false,
+      output:
+        "This language is not configured in Judge0.",
+    };
+  }
+
+
+  try {
+
+    console.log(
+      "======================================"
+    );
+
+    console.log(
+      "JUDGE0 CODE RUN"
+    );
+
+    console.log(
+      "Language:",
+      cleanLanguage
+    );
+
+    console.log(
+      "Language ID:",
+      languageId
+    );
+
+    console.log(
+      "======================================"
+    );
+
+
+    // -------------------------------------------------
+    // CREATE SUBMISSION
+    // -------------------------------------------------
+
+    const submissionResponse =
+      await fetch(
+        `${JUDGE0_URL}/submissions/?base64_encoded=false&wait=false`,
+        {
+          method: "POST",
+
+          headers:
+            getJudge0Headers(),
+
+          body: JSON.stringify({
+            source_code:
+              String(code),
+
+            language_id:
+              languageId,
+
+            stdin:
+              String(input || ""),
+
+            cpu_time_limit: 5,
+
+            wall_time_limit: 10,
+
+            memory_limit: 128000,
+          }),
+        }
+      );
+
+
+    const submissionText =
+      await submissionResponse.text();
+
+
+    let submissionData;
+
+    try {
+      submissionData =
+        JSON.parse(
+          submissionText
+        );
+    } catch {
+      submissionData = null;
+    }
+
+
+    // -------------------------------------------------
+    // SUBMISSION ERROR
+    // -------------------------------------------------
+
+    if (
+      !submissionResponse.ok
+    ) {
+
+      console.error(
+        "JUDGE0 SUBMISSION ERROR:",
+        submissionText
+      );
+
+      return {
+        success: false,
+
+        output:
+          submissionData?.error ||
+          submissionText ||
+          `Judge0 returned HTTP ${submissionResponse.status}`,
+      };
+    }
+
+
+    const token =
+      submissionData?.token;
+
+
+    if (!token) {
+
+      return {
+        success: false,
+
+        output:
+          "Judge0 did not return a submission token.",
+      };
+    }
+
+
+    console.log(
+      "Judge0 token:",
+      token
+    );
+
+
+    // -------------------------------------------------
+    // POLL RESULT
+    // -------------------------------------------------
+
+    const startedAt =
+      Date.now();
+
+
+    while (
+      Date.now() - startedAt <
+      CODE_RUN_TIMEOUT
+    ) {
+
+      await sleep(1000);
+
+
+      const resultResponse =
+        await fetch(
+          `${JUDGE0_URL}/submissions/${token}?base64_encoded=false`,
+          {
+            method: "GET",
+
+            headers:
+              getJudge0Headers(),
+          }
+        );
+
+
+      const resultText =
+        await resultResponse.text();
+
+
+      let result;
+
+      try {
+        result =
+          JSON.parse(
+            resultText
+          );
+      } catch {
+        result = null;
+      }
+
+
+      if (
+        !resultResponse.ok
+      ) {
+
+        return {
+          success: false,
+
+          output:
+            result?.error ||
+            resultText ||
+            "Unable to get code execution result.",
+        };
+      }
+
+
+      // -------------------------------------------------
+      // STATUS
+      // -------------------------------------------------
+
+      const statusId =
+        Number(
+          result?.status?.id
+        );
+
+
+      const statusDescription =
+        result?.status?.description ||
+        "";
+
+
+      console.log(
+        "Judge0 status:",
+        statusId,
+        statusDescription
+      );
+
+
+      // 1 = In Queue
+      // 2 = Processing
+      // 3+ = Finished
+
+      if (
+        statusId === 1 ||
+        statusId === 2
+      ) {
+        continue;
+      }
+
+
+      // -------------------------------------------------
+      // OUTPUT
+      // -------------------------------------------------
+
+      const output =
+        result?.stdout ||
+        result?.stderr ||
+        result?.compile_output ||
+        result?.message ||
+        statusDescription ||
+        "Program finished.";
+
+
+      return {
+        success:
+          statusId === 3,
+
+        output:
+          String(output),
+      };
+    }
+
+
+    // -------------------------------------------------
+    // TIMEOUT
+    // -------------------------------------------------
+
+    return {
+      success: false,
+
+      output:
+        "Code execution timed out. Please try again.",
+    };
+
+
+  } catch (error) {
+
+    console.error(
+      "JUDGE0 EXECUTION ERROR:",
+      error
+    );
+
+
+    return {
+      success: false,
+
+      output:
+        error.message ||
+        "Code execution failed.",
+    };
+  }
+}
+
 // =====================================================
 // RUN CODE
 // MUST BE BEFORE API 404
