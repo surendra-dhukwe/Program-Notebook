@@ -2187,7 +2187,7 @@ app.post(
 
 // =====================================================
 // CODE RUNNER - JUDGE0
-// VERCEL SAFE VERSION
+// VERCEL SAFE + CLEAR ERROR OUTPUT
 // =====================================================
 
 const JUDGE0_URL =
@@ -2238,7 +2238,7 @@ function normalizeCodeLanguage(language) {
 
 
 // =====================================================
-// JUDGE0 LANGUAGE IDs
+// JUDGE0 LANGUAGE IDS
 // =====================================================
 
 const JUDGE0_LANGUAGE_IDS = {
@@ -2266,17 +2266,17 @@ function sleep(ms) {
 
 
 // =====================================================
-// JUDGE0 REQUEST HEADERS
+// JUDGE0 HEADERS
 // =====================================================
 
 function getJudge0Headers() {
   const headers = {
     "Content-Type": "application/json",
+    "Accept": "application/json",
   };
 
   if (JUDGE0_TOKEN) {
-    headers["X-Auth-Token"] =
-      JUDGE0_TOKEN;
+    headers["X-Auth-Token"] = JUDGE0_TOKEN;
   }
 
   return headers;
@@ -2284,7 +2284,137 @@ function getJudge0Headers() {
 
 
 // =====================================================
-// RUN CODE USING JUDGE0
+// SAFE BASE64 DECODER
+// =====================================================
+
+function decodeJudge0Value(value) {
+  if (
+    value === null ||
+    value === undefined ||
+    value === ""
+  ) {
+    return "";
+  }
+
+  try {
+    return Buffer.from(
+      String(value),
+      "base64"
+    ).toString("utf8");
+  } catch (error) {
+    console.error(
+      "BASE64 DECODE ERROR:",
+      error.message
+    );
+
+    return String(value);
+  }
+}
+
+
+// =====================================================
+// FORMAT JUDGE0 ERROR
+// =====================================================
+
+function formatExecutionError({
+  statusId,
+  statusDescription,
+  stdout,
+  stderr,
+  compileOutput,
+  message,
+}) {
+  // ---------------------------------------------------
+  // COMPILATION ERROR
+  // ---------------------------------------------------
+
+  if (statusId === 6) {
+    return (
+      "COMPILATION ERROR\n" +
+      "==============================\n" +
+      (compileOutput ||
+        stderr ||
+        message ||
+        "Compilation failed.")
+    );
+  }
+
+  // ---------------------------------------------------
+  // RUNTIME ERROR
+  // ---------------------------------------------------
+
+  if (statusId === 7) {
+    return (
+      "RUNTIME ERROR\n" +
+      "==============================\n" +
+      (stderr ||
+        message ||
+        stdout ||
+        "Program terminated with a runtime error.")
+    );
+  }
+
+  // ---------------------------------------------------
+  // TIME LIMIT
+  // ---------------------------------------------------
+
+  if (
+    statusId === 5 ||
+    statusId === 8
+  ) {
+    return (
+      "TIME LIMIT EXCEEDED\n" +
+      "==============================\n" +
+      "Your program took too long to execute."
+    );
+  }
+
+  // ---------------------------------------------------
+  // MEMORY LIMIT
+  // ---------------------------------------------------
+
+  if (statusId === 11) {
+    return (
+      "MEMORY LIMIT EXCEEDED\n" +
+      "==============================\n" +
+      "Your program used more memory than allowed."
+    );
+  }
+
+  // ---------------------------------------------------
+  // WRONG ANSWER
+  // ---------------------------------------------------
+
+  if (statusId === 4) {
+    return (
+      "WRONG ANSWER\n" +
+      "==============================\n" +
+      (stdout ||
+        message ||
+        "Program output did not match the expected result.")
+    );
+  }
+
+  // ---------------------------------------------------
+  // GENERAL ERROR
+  // ---------------------------------------------------
+
+  return (
+    "PROGRAM ERROR\n" +
+    "==============================\n" +
+    (
+      stderr ||
+      compileOutput ||
+      message ||
+      statusDescription ||
+      "Program execution failed."
+    )
+  );
+}
+
+
+// =====================================================
+// EXECUTE CODE USING JUDGE0
 // =====================================================
 
 async function executeCode({
@@ -2293,26 +2423,27 @@ async function executeCode({
   input = "",
 }) {
 
+  // ===================================================
+  // NORMALIZE LANGUAGE
+  // ===================================================
+
   const cleanLanguage =
     normalizeCodeLanguage(language);
-
-
-  // ---------------------------------------------------
-  // LANGUAGE CHECK
-  // ---------------------------------------------------
 
   if (!cleanLanguage) {
     return {
       success: false,
       output:
+        "LANGUAGE ERROR\n" +
+        "==============================\n" +
         "Unsupported programming language.",
     };
   }
 
 
-  // ---------------------------------------------------
-  // CODE CHECK
-  // ---------------------------------------------------
+  // ===================================================
+  // CODE VALIDATION
+  // ===================================================
 
   if (
     !code ||
@@ -2320,14 +2451,17 @@ async function executeCode({
   ) {
     return {
       success: false,
-      output: "Code is empty.",
+      output:
+        "CODE ERROR\n" +
+        "==============================\n" +
+        "Code is empty.",
     };
   }
 
 
-  // ---------------------------------------------------
-  // SIZE LIMIT
-  // ---------------------------------------------------
+  // ===================================================
+  // CODE SIZE
+  // ===================================================
 
   if (
     String(code).length >
@@ -2336,14 +2470,17 @@ async function executeCode({
     return {
       success: false,
       output:
-        "Code is too large. Maximum 100 KB allowed.",
+        "CODE ERROR\n" +
+        "==============================\n" +
+        "Code is too large.\n" +
+        "Maximum allowed size: 100 KB.",
     };
   }
 
 
-  // ---------------------------------------------------
-  // INPUT LIMIT
-  // ---------------------------------------------------
+  // ===================================================
+  // INPUT SIZE
+  // ===================================================
 
   if (
     String(input).length >
@@ -2352,21 +2489,29 @@ async function executeCode({
     return {
       success: false,
       output:
-        "Input is too large. Maximum 50 KB allowed.",
+        "INPUT ERROR\n" +
+        "==============================\n" +
+        "Input is too large.\n" +
+        "Maximum allowed size: 50 KB.",
     };
   }
 
+
+  // ===================================================
+  // LANGUAGE ID
+  // ===================================================
 
   const languageId =
     JUDGE0_LANGUAGE_IDS[
       cleanLanguage
     ];
 
-
   if (!languageId) {
     return {
       success: false,
       output:
+        "CONFIGURATION ERROR\n" +
+        "==============================\n" +
         "This language is not configured in Judge0.",
     };
   }
@@ -2374,36 +2519,66 @@ async function executeCode({
 
   try {
 
+    console.log("");
     console.log(
       "======================================"
     );
-
     console.log(
-      "JUDGE0 CODE RUN"
+      "         JUDGE0 CODE RUN"
     );
-
+    console.log(
+      "======================================"
+    );
     console.log(
       "Language:",
       cleanLanguage
     );
-
     console.log(
       "Language ID:",
       languageId
     );
-
+    console.log(
+      "Code Length:",
+      String(code).length
+    );
+    console.log(
+      "Input Length:",
+      String(input).length
+    );
     console.log(
       "======================================"
     );
 
 
-    // -------------------------------------------------
+    // =================================================
+    // BASE64 ENCODE SOURCE CODE
+    // =================================================
+
+    const sourceCodeBase64 =
+      Buffer.from(
+        String(code),
+        "utf8"
+      ).toString("base64");
+
+
+    const inputBase64 =
+      Buffer.from(
+        String(input || ""),
+        "utf8"
+      ).toString("base64");
+
+
+    // =================================================
     // CREATE SUBMISSION
-    // -------------------------------------------------
+    // =================================================
+
+    console.log(
+      "Sending code to Judge0..."
+    );
 
     const submissionResponse =
       await fetch(
-        `${JUDGE0_URL}/submissions/?base64_encoded=false&wait=false`,
+        `${JUDGE0_URL}/submissions/?base64_encoded=true&wait=false`,
         {
           method: "POST",
 
@@ -2412,13 +2587,13 @@ async function executeCode({
 
           body: JSON.stringify({
             source_code:
-              String(code),
+              sourceCodeBase64,
 
             language_id:
               languageId,
 
             stdin:
-              String(input || ""),
+              inputBase64,
 
             cpu_time_limit: 5,
 
@@ -2434,7 +2609,7 @@ async function executeCode({
       await submissionResponse.text();
 
 
-    let submissionData;
+    let submissionData = null;
 
     try {
       submissionData =
@@ -2446,9 +2621,9 @@ async function executeCode({
     }
 
 
-    // -------------------------------------------------
-    // SUBMISSION ERROR
-    // -------------------------------------------------
+    // =================================================
+    // JUDGE0 SUBMISSION ERROR
+    // =================================================
 
     if (
       !submissionResponse.ok
@@ -2463,23 +2638,38 @@ async function executeCode({
         success: false,
 
         output:
-          submissionData?.error ||
-          submissionText ||
-          `Judge0 returned HTTP ${submissionResponse.status}`,
+          "JUDGE0 ERROR\n" +
+          "==============================\n" +
+          (
+            submissionData?.error ||
+            submissionData?.message ||
+            submissionText ||
+            `Judge0 returned HTTP ${submissionResponse.status}`
+          ),
       };
     }
 
 
+    // =================================================
+    // TOKEN
+    // =================================================
+
     const token =
       submissionData?.token;
 
-
     if (!token) {
+
+      console.error(
+        "Judge0 response:",
+        submissionData
+      );
 
       return {
         success: false,
 
         output:
+          "JUDGE0 ERROR\n" +
+          "==============================\n" +
           "Judge0 did not return a submission token.",
       };
     }
@@ -2491,9 +2681,9 @@ async function executeCode({
     );
 
 
-    // -------------------------------------------------
+    // =================================================
     // POLL RESULT
-    // -------------------------------------------------
+    // =================================================
 
     const startedAt =
       Date.now();
@@ -2509,7 +2699,7 @@ async function executeCode({
 
       const resultResponse =
         await fetch(
-          `${JUDGE0_URL}/submissions/${token}?base64_encoded=false`,
+          `${JUDGE0_URL}/submissions/${token}?base64_encoded=true`,
           {
             method: "GET",
 
@@ -2523,7 +2713,7 @@ async function executeCode({
         await resultResponse.text();
 
 
-      let result;
+      let result = null;
 
       try {
         result =
@@ -2535,30 +2725,43 @@ async function executeCode({
       }
 
 
+      // =================================================
+      // RESULT HTTP ERROR
+      // =================================================
+
       if (
         !resultResponse.ok
       ) {
+
+        console.error(
+          "JUDGE0 RESULT ERROR:",
+          resultText
+        );
 
         return {
           success: false,
 
           output:
-            result?.error ||
-            resultText ||
-            "Unable to get code execution result.",
+            "JUDGE0 RESULT ERROR\n" +
+            "==============================\n" +
+            (
+              result?.error ||
+              result?.message ||
+              resultText ||
+              "Unable to get code execution result."
+            ),
         };
       }
 
 
-      // -------------------------------------------------
+      // =================================================
       // STATUS
-      // -------------------------------------------------
+      // =================================================
 
       const statusId =
         Number(
           result?.status?.id
         );
-
 
       const statusDescription =
         result?.status?.description ||
@@ -2574,7 +2777,6 @@ async function executeCode({
 
       // 1 = In Queue
       // 2 = Processing
-      // 3+ = Finished
 
       if (
         statusId === 1 ||
@@ -2584,38 +2786,104 @@ async function executeCode({
       }
 
 
-      // -------------------------------------------------
-      // OUTPUT
-      // -------------------------------------------------
+      // =================================================
+      // DECODE OUTPUTS
+      // =================================================
 
-      const output =
-        result?.stdout ||
-        result?.stderr ||
-        result?.compile_output ||
-        result?.message ||
-        statusDescription ||
-        "Program finished.";
+      const stdout =
+        decodeJudge0Value(
+          result?.stdout
+        );
+
+      const stderr =
+        decodeJudge0Value(
+          result?.stderr
+        );
+
+      const compileOutput =
+        decodeJudge0Value(
+          result?.compile_output
+        );
+
+      const message =
+        decodeJudge0Value(
+          result?.message
+        );
+
+
+      // =================================================
+      // ACCEPTED
+      // status 3 = Accepted
+      // =================================================
+
+      if (
+        statusId === 3
+      ) {
+
+        console.log(
+          "PROGRAM EXECUTION SUCCESS"
+        );
+
+        return {
+          success: true,
+
+          output:
+            stdout ||
+            "Program executed successfully.",
+        };
+      }
+
+
+      // =================================================
+      // ERROR / FAILED PROGRAM
+      // =================================================
+
+      const errorOutput =
+        formatExecutionError({
+          statusId,
+          statusDescription,
+          stdout,
+          stderr,
+          compileOutput,
+          message,
+        });
+
+
+      console.log(
+        "PROGRAM EXECUTION FAILED"
+      );
+
+      console.log(
+        errorOutput
+      );
 
 
       return {
-        success:
-          statusId === 3,
+        success: false,
 
         output:
-          String(output),
+          errorOutput,
       };
     }
 
 
-    // -------------------------------------------------
+    // =================================================
     // TIMEOUT
-    // -------------------------------------------------
+    // =================================================
+
+    console.error(
+      "JUDGE0 CODE EXECUTION TIMEOUT"
+    );
+
 
     return {
       success: false,
 
       output:
-        "Code execution timed out. Please try again.",
+        "EXECUTION TIMEOUT\n" +
+        "==============================\n" +
+        "Code execution took too long.\n" +
+        "Please check your program for an infinite loop or try again.",
     };
 
 
@@ -2631,15 +2899,19 @@ async function executeCode({
       success: false,
 
       output:
-        error.message ||
-        "Code execution failed.",
+        "CODE RUNNER ERROR\n" +
+        "==============================\n" +
+        (
+          error.message ||
+          "Code execution failed."
+        ),
     };
   }
 }
 
+
 // =====================================================
-// RUN CODE
-// MUST BE BEFORE API 404
+// RUN CODE API
 // =====================================================
 
 app.post(
@@ -2655,6 +2927,37 @@ app.post(
       } = req.body || {};
 
 
+      console.log("");
+      console.log(
+        "======================================"
+      );
+      console.log(
+        "        /api/code/run REQUEST"
+      );
+      console.log(
+        "======================================"
+      );
+      console.log(
+        "Language:",
+        language
+      );
+      console.log(
+        "Code received:",
+        Boolean(code)
+      );
+      console.log(
+        "Input received:",
+        Boolean(input)
+      );
+      console.log(
+        "======================================"
+      );
+
+
+      // =================================================
+      // EMPTY CODE
+      // =================================================
+
       if (
         !code ||
         !String(code).trim()
@@ -2662,11 +2965,18 @@ app.post(
 
         return res.status(400).json({
           success: false,
+
           output:
-            "Code is empty.",
+            "CODE ERROR\n" +
+            "==============================\n" +
+            "Please enter some code before running.",
         });
       }
 
+
+      // =================================================
+      // SIZE CHECK
+      // =================================================
 
       if (
         String(code).length >
@@ -2675,11 +2985,19 @@ app.post(
 
         return res.status(400).json({
           success: false,
+
           output:
-            "Code is too large. Maximum 100 KB allowed.",
+            "CODE ERROR\n" +
+            "==============================\n" +
+            "Code is too large.\n" +
+            "Maximum allowed size: 100 KB.",
         });
       }
 
+
+      // =================================================
+      // EXECUTE
+      // =================================================
 
       const result =
         await executeCode({
@@ -2688,6 +3006,10 @@ app.post(
           input,
         });
 
+
+      // =================================================
+      // RESPONSE
+      // =================================================
 
       return res.status(
         result.success
@@ -2699,9 +3021,12 @@ app.post(
           result.success,
 
         output:
-          result.output || "",
+          String(
+            result.output || ""
+          ),
 
       });
+
 
     } catch (error) {
 
@@ -2716,8 +3041,12 @@ app.post(
         success: false,
 
         output:
-          error.message ||
-          "Unable to run code.",
+          "SERVER CODE RUNNER ERROR\n" +
+          "==============================\n" +
+          (
+            error.message ||
+            "Unable to run code."
+          ),
 
       });
     }
