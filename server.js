@@ -2323,6 +2323,8 @@ function formatExecutionError({
   stderr,
   compileOutput,
   message,
+  code,
+  input,
 }) {
   // ---------------------------------------------------
   // COMPILATION ERROR
@@ -2423,7 +2425,7 @@ async function executeCode({
   input = "",
 }) {
 
-  // ===================================================
+      // ===================================================
   // NORMALIZE LANGUAGE
   // ===================================================
 
@@ -2440,6 +2442,100 @@ async function executeCode({
     };
   }
 
+    // ===================================================
+  // EMPTY INPUT CHECK
+  // ===================================================
+
+  // const sourceCode = String(code || "");
+
+  // const hasInputFunction =
+  //   /\bscanf\s*\(|\bgets\s*\(|\bfgets\s*\(|\bcin\s*>>|\bgetline\s*\(|\binput\s*\(|\bScanner\s*\(/i.test(
+  //     sourceCode
+  //   );
+
+  // const hasInput =
+  //   String(input || "").trim().length > 0;
+
+  // if (hasInputFunction && !hasInput) {
+  //   return {
+  //     success: false,
+  //     output:
+  //       "INPUT REQUIRED\n" +
+  //       "==============================\n" +
+  //       "This program requires user input.\n" +
+  //       "Please enter the required input in the Input/Stdin box and run again.",
+  //   };
+  // }
+
+  // ===================================================
+// INPUT VALIDATION
+// ===================================================
+
+const sourceCode = String(code || "");
+const userInput = String(input || "").trim();
+
+// ---------------------------------------------------
+// C / C++ numeric scanf validation
+// ---------------------------------------------------
+
+if (
+  (cleanLanguage === "c" || cleanLanguage === "cpp") &&
+  /\bscanf\s*\(\s*["'][^"']*%[fdiu]/i.test(sourceCode) &&
+  userInput
+) {
+  const firstInputValue = userInput
+    .split(/\s+/)[0]
+    .trim();
+
+  const numericValue =
+    Number(firstInputValue);
+
+  if (
+    Number.isNaN(numericValue)
+  ) {
+    return {
+      success: false,
+      output:
+        "INVALID INPUT\n" +
+        "==============================\n" +
+        "This program expects a numeric value.\n\n" +
+        `Received input: ${firstInputValue}\n\n` +
+        "Please enter a valid number.\n" +
+        "Example: 12.32",
+    };
+  }
+}
+
+// ---------------------------------------------------
+// Empty input check
+// ---------------------------------------------------
+
+const hasInputFunction =
+  (
+    cleanLanguage === "c" ||
+    cleanLanguage === "cpp"
+  ) &&
+  (
+    /\bscanf\s*\(/i.test(sourceCode) ||
+    /\bgets\s*\(/i.test(sourceCode) ||
+    /\bfgets\s*\(/i.test(sourceCode) ||
+    /\bcin\s*>>/i.test(sourceCode) ||
+    /\bgetline\s*\(/i.test(sourceCode)
+  );
+
+if (
+  hasInputFunction &&
+  !userInput
+) {
+  return {
+    success: false,
+    output:
+      "INPUT REQUIRED\n" +
+      "==============================\n" +
+      "This program requires user input.\n\n" +
+      "Please enter the required input in the Input/Stdin box and run again.",
+  };
+}
 
   // ===================================================
   // CODE VALIDATION
@@ -2839,14 +2935,16 @@ async function executeCode({
       // =================================================
 
       const errorOutput =
-        formatExecutionError({
-          statusId,
-          statusDescription,
-          stdout,
-          stderr,
-          compileOutput,
-          message,
-        });
+  formatExecutionError({
+    statusId,
+    statusDescription,
+    stdout,
+    stderr,
+    compileOutput,
+    message,
+    code,
+    input,
+  });
 
 
       console.log(
