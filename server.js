@@ -2602,6 +2602,13 @@ if (
       cleanLanguage
     ];
 
+    const compilerOptions =
+  cleanLanguage === "c"
+    ? "-lm"
+    : cleanLanguage === "cpp"
+      ? "-std=c++17"
+      : "";
+
   if (!languageId) {
     return {
       success: false,
@@ -2672,33 +2679,31 @@ if (
       "Sending code to Judge0..."
     );
 
-    const submissionResponse =
-      await fetch(
-        `${JUDGE0_URL}/submissions/?base64_encoded=true&wait=false`,
-        {
-          method: "POST",
+const submissionResponse =
+  await fetch(
+    `${JUDGE0_URL}/submissions/?base64_encoded=true&wait=false`,
+    {
+      method: "POST",
+      headers: getJudge0Headers(),
 
-          headers:
-            getJudge0Headers(),
+      body: JSON.stringify({
+        source_code: sourceCodeBase64,
 
-          body: JSON.stringify({
-            source_code:
-              sourceCodeBase64,
+        language_id: languageId,
 
-            language_id:
-              languageId,
+        stdin: inputBase64,
 
-            stdin:
-              inputBase64,
+        compiler_options:
+          compilerOptions,
 
-            cpu_time_limit: 5,
+        cpu_time_limit: 5,
 
-            wall_time_limit: 10,
+        wall_time_limit: 10,
 
-            memory_limit: 128000,
-          }),
-        }
-      );
+        memory_limit: 128000,
+      }),
+    }
+  );
 
 
     const submissionText =
