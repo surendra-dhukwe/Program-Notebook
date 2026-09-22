@@ -1919,6 +1919,58 @@
 
   </div>
 
+<!-- ================= HTML LIVE PREVIEW ================= -->
+<div id="htmlPreviewPanel" style="display:none;">
+
+  <div class="html-preview-header">
+    <div>
+      <strong>🌐 HTML Live Preview</strong>
+      <span id="htmlPreviewStatus">Ready</span>
+    </div>
+
+    <div class="html-preview-actions">
+      <button type="button" id="htmlPreviewRunBtn">
+        ▶ Run
+      </button>
+
+      <button type="button" id="htmlPreviewLiveBtn" aria-pressed="true">
+        ⚡ Live
+      </button>
+
+      <button type="button" id="htmlPreviewRefreshBtn">
+        ↻ Refresh
+      </button>
+
+      <button type="button" class="html-size-btn" data-size="100">
+        100%
+      </button>
+
+      <button type="button" class="html-size-btn" data-size="75">
+        75%
+      </button>
+
+      <button type="button" class="html-size-btn" data-size="50">
+        50%
+      </button>
+    </div>
+  </div>
+
+  <div id="htmlPreviewViewport">
+
+    <iframe
+      id="htmlPreviewFrame"
+      title="HTML Live Preview"
+      sandbox="allow-scripts allow-forms allow-modals">
+    </iframe>
+
+    <div
+      id="htmlPreviewResizeHandle"
+      title="Drag to resize">
+    </div>
+
+  </div>
+
+</div>
 
   <!-- =====================================================
        PRISM

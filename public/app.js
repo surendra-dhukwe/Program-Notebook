@@ -1983,7 +1983,8 @@ const CODE_RUN_LANGUAGES = [
     "TypeScript",
     "PHP",
     "Go",
-    "Rust"
+    "Rust",
+    "HTML"
 ];
 
 
@@ -2051,7 +2052,7 @@ function getRunLanguage() {
 // =====================================================
 
 function normalizeRunLanguage(language) {
-
+    
     const value =
         String(
             language || ""
@@ -2083,7 +2084,10 @@ function normalizeRunLanguage(language) {
         "golang": "go",
 
         "rust": "rust",
-        "rs": "rust"
+        "rs": "rust",
+
+        "html": "html",
+        "htm": "html"
     };
 
     return map[value] || value;
@@ -2457,6 +2461,11 @@ async function runCurrentCode(
     // =============================================
     // CHECK INPUT
     // =============================================
+
+    if (normalizedLanguage === "html") {
+    activateHTMLPreview();
+    return;
+}
 
     if (
         inputOverride === null &&
@@ -3100,7 +3109,8 @@ languageSelect.addEventListener(
                 "codeFileInput";
 
             fileInput.accept =
-                ".c,.h,.cpp,.cc,.cxx,.py,.java,.js,.mjs,.ts,.php,.go,.rs,.txt";
+                ".c,.h,.cpp,.cc,.cxx,.py,.java,.js,.mjs,.ts,.php,.go,.rs,.html,.htm,.txt";
+                
 
             fileInput.style.display =
                 "none";
@@ -3229,6 +3239,21 @@ async function runReaderCode(
     const normalizedLanguage =
         normalizeRunLanguage(language);
 
+    // =============================================
+// HTML FROM UPLOADED NOTE
+// =============================================
+
+if (
+    normalizedLanguage === "html"
+) {
+
+    showReaderHTMLPreview(code);
+
+    return {
+        success: true,
+        output: "HTML Preview Running"
+    };
+}
 
     // =============================================
     // INPUT REQUIRED
@@ -3317,6 +3342,205 @@ async function runReaderCode(
                 "Unable to run code."
         };
     }
+}
+
+// =====================================================
+// HTML PREVIEW FOR UPLOADED NOTES
+// =====================================================
+
+function showReaderHTMLPreview(code) {
+
+    const codeWrap =
+        $("readerCodeWrap");
+
+    if (!codeWrap) {
+        return;
+    }
+
+
+    // Remove old preview
+    const oldPreview =
+        $("readerHTMLPreview");
+
+    if (oldPreview) {
+        oldPreview.remove();
+    }
+
+
+    // Create preview container
+    const preview =
+        document.createElement("div");
+
+    preview.id =
+        "readerHTMLPreview";
+
+    preview.style.cssText = `
+        margin-top: 16px;
+        width: 100%;
+        border: 1px solid rgba(255,255,255,.12);
+        border-radius: 14px;
+        overflow: hidden;
+        background: #ffffff;
+    `;
+
+
+    // Preview header
+    const header =
+        document.createElement("div");
+
+    header.style.cssText = `
+        height: 46px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0 14px;
+        background: #111827;
+        color: #fff;
+        font-size: 13px;
+        font-weight: 600;
+    `;
+
+    header.innerHTML = `
+        <span>🌐 HTML LIVE PREVIEW</span>
+
+        <button
+            type="button"
+            id="readerHTMLRefresh"
+            style="
+                border: 1px solid rgba(255,255,255,.15);
+                background: rgba(255,255,255,.08);
+                color: #fff;
+                padding: 6px 10px;
+                border-radius: 8px;
+                cursor: pointer;
+            "
+        >
+            ↻ Refresh
+        </button>
+    `;
+
+
+    // Iframe
+    const frame =
+        document.createElement("iframe");
+
+    frame.id =
+        "readerHTMLFrame";
+
+    frame.title =
+        "HTML Preview";
+
+    frame.setAttribute(
+        "sandbox",
+        "allow-scripts allow-forms allow-modals"
+    );
+
+    frame.style.cssText = `
+        display: block;
+        width: 100%;
+        height: 520px;
+        border: 0;
+        background: #fff;
+    `;
+
+
+    preview.appendChild(header);
+
+    preview.appendChild(frame);
+
+    codeWrap.appendChild(preview);
+
+
+    // =========================================
+    // BUILD HTML DOCUMENT
+    // =========================================
+
+    function buildPreviewDocument(source) {
+
+        const html =
+            String(source || "");
+
+
+        // Complete HTML document
+        if (
+            /<!doctype\s+html/i.test(html) ||
+            /<html[\s>]/i.test(html)
+        ) {
+
+            return html;
+        }
+
+
+        // HTML fragment
+        return `
+<!DOCTYPE html>
+
+<html lang="en">
+
+<head>
+
+<meta charset="UTF-8">
+
+<meta
+    name="viewport"
+    content="width=device-width, initial-scale=1.0"
+>
+
+<title>Program Notebook Preview</title>
+
+</head>
+
+<body>
+
+${html}
+
+</body>
+
+</html>
+`;
+    }
+
+
+    // =========================================
+    // RUN HTML
+    // =========================================
+
+    function runPreview() {
+
+        frame.srcdoc =
+            buildPreviewDocument(code);
+    }
+
+
+    runPreview();
+
+
+    // =========================================
+    // REFRESH BUTTON
+    // =========================================
+
+    document
+        .getElementById(
+            "readerHTMLRefresh"
+        )
+        ?.addEventListener(
+            "click",
+            runPreview
+        );
+
+
+    // =========================================
+    // AUTO SCROLL TO PREVIEW
+    // =========================================
+
+    setTimeout(() => {
+
+        preview.scrollIntoView({
+            behavior: "smooth",
+            block: "nearest"
+        });
+
+    }, 100);
 }
 
 function showReaderInputBox(
@@ -7022,3 +7246,579 @@ ensureCodeRunnerUI();
     }
 );
     
+/* =========================================================
+   HTML LIVE BROWSER PREVIEW
+========================================================= */
+
+let htmlPreviewLive = true;
+let htmlPreviewTimer = null;
+let htmlPreviewWidth = 100;
+
+function isHTMLRunLanguage(language) {
+    return normalizeRunLanguage(language) === "html";
+}
+
+function ensureHTMLPreviewUI() {
+    const panel = document.getElementById("htmlPreviewPanel");
+
+    if (!panel) {
+        return false;
+    }
+
+    return true;
+}
+
+function setHTMLPreviewVisible(show) {
+    const panel = document.getElementById("htmlPreviewPanel");
+
+    if (!panel) {
+        return;
+    }
+
+    panel.style.display = show ? "block" : "none";
+}
+
+function getCurrentEditorCode() {
+
+    const editor =
+        document.querySelector(
+            "#codeInput"
+        ) ||
+        document.querySelector(
+            "#codeEditor"
+        ) ||
+        document.querySelector(
+            "textarea[name='code']"
+        );
+
+    return editor
+        ? String(editor.value || "")
+        : "";
+}
+
+function buildHTMLPreviewDocument(code) {
+
+    const source = String(code || "");
+
+    /*
+      Agar user complete HTML document likhta hai
+      to same code render hoga.
+    */
+
+    if (
+        /<!doctype\s+html/i.test(source) ||
+        /<html[\s>]/i.test(source)
+    ) {
+        return source;
+    }
+
+    /*
+      Agar sirf HTML fragment hai,
+      to automatically complete document banega.
+    */
+
+    return `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+
+<meta
+    name="viewport"
+    content="width=device-width, initial-scale=1.0"
+>
+
+<title>Program Notebook Preview</title>
+
+</head>
+
+<body>
+
+${source}
+
+</body>
+</html>
+`;
+}
+
+function updateHTMLPreview() {
+
+    const frame =
+        document.getElementById(
+            "htmlPreviewFrame"
+        );
+
+    const status =
+        document.getElementById(
+            "htmlPreviewStatus"
+        );
+
+    if (!frame) {
+        return;
+    }
+
+    const code =
+        getCurrentEditorCode();
+
+    frame.srcdoc =
+        buildHTMLPreviewDocument(code);
+
+    if (status) {
+        status.textContent =
+            "Live Preview";
+    }
+}
+
+function scheduleHTMLPreviewUpdate() {
+
+    if (!htmlPreviewLive) {
+        return;
+    }
+
+    clearTimeout(htmlPreviewTimer);
+
+    htmlPreviewTimer =
+        setTimeout(() => {
+            updateHTMLPreview();
+        }, 180);
+}
+
+function activateHTMLPreview() {
+
+    if (!ensureHTMLPreviewUI()) {
+        return;
+    }
+
+    setHTMLPreviewVisible(true);
+
+    updateHTMLPreview();
+
+    const status =
+        document.getElementById(
+            "htmlPreviewStatus"
+        );
+
+    if (status) {
+        status.textContent =
+            "HTML Running";
+    }
+}
+
+function deactivateHTMLPreview() {
+
+    setHTMLPreviewVisible(false);
+}
+
+function toggleHTMLPreviewMode() {
+
+    htmlPreviewLive =
+        !htmlPreviewLive;
+
+    const button =
+        document.getElementById(
+            "htmlPreviewLiveBtn"
+        );
+
+    if (button) {
+
+        button.setAttribute(
+            "aria-pressed",
+            String(htmlPreviewLive)
+        );
+
+        button.textContent =
+            htmlPreviewLive
+                ? "⚡ Live"
+                : "⏸ Live";
+    }
+
+    if (htmlPreviewLive) {
+        updateHTMLPreview();
+    }
+}
+
+function setHTMLPreviewSize(size) {
+
+    const viewport =
+        document.getElementById(
+            "htmlPreviewViewport"
+        );
+
+    if (!viewport) {
+        return;
+    }
+
+    htmlPreviewWidth =
+        Number(size) || 100;
+
+    viewport.style.width =
+        `${htmlPreviewWidth}%`;
+}
+
+function initHTMLPreviewResize() {
+
+    const viewport =
+        document.getElementById(
+            "htmlPreviewViewport"
+        );
+
+    const handle =
+        document.getElementById(
+            "htmlPreviewResizeHandle"
+        );
+
+    if (!viewport || !handle) {
+        return;
+    }
+
+    let resizing = false;
+    let startX = 0;
+    let startY = 0;
+    let startWidth = 0;
+    let startHeight = 0;
+
+    handle.addEventListener(
+        "pointerdown",
+        (event) => {
+
+            event.preventDefault();
+
+            resizing = true;
+
+            startX =
+                event.clientX;
+
+            startY =
+                event.clientY;
+
+            const rect =
+                viewport.getBoundingClientRect();
+
+            startWidth =
+                rect.width;
+
+            startHeight =
+                rect.height;
+
+            handle.setPointerCapture(
+                event.pointerId
+            );
+        }
+    );
+
+    handle.addEventListener(
+        "pointermove",
+        (event) => {
+
+            if (!resizing) {
+                return;
+            }
+
+            const parent =
+                viewport.parentElement;
+
+            const parentWidth =
+                parent
+                    ? parent.clientWidth
+                    : 1200;
+
+            const newWidth =
+                Math.min(
+                    parentWidth,
+                    Math.max(
+                        320,
+                        startWidth +
+                        (
+                            event.clientX -
+                            startX
+                        )
+                    )
+                );
+
+            const newHeight =
+                Math.max(
+                    280,
+                    Math.min(
+                        900,
+                        startHeight +
+                        (
+                            event.clientY -
+                            startY
+                        )
+                    )
+                );
+
+            viewport.style.width =
+                `${newWidth}px`;
+
+            viewport.style.height =
+                `${newHeight}px`;
+
+            htmlPreviewWidth = null;
+        }
+    );
+
+    handle.addEventListener(
+        "pointerup",
+        (event) => {
+
+            resizing = false;
+
+            try {
+                handle.releasePointerCapture(
+                    event.pointerId
+                );
+            } catch (error) {}
+        }
+    );
+}
+
+function injectHTMLPreviewStyles() {
+
+    if (
+        document.getElementById(
+            "htmlPreviewInjectedStyles"
+        )
+    ) {
+        return;
+    }
+
+    const style =
+        document.createElement("style");
+
+    style.id =
+        "htmlPreviewInjectedStyles";
+
+    style.textContent = `
+        #htmlPreviewPanel {
+            margin-top: 18px;
+            width: 100%;
+            border: 1px solid rgba(255,255,255,.10);
+            border-radius: 18px;
+            overflow: hidden;
+            background: #080b12;
+        }
+
+        .html-preview-header {
+            min-height: 58px;
+            padding: 10px 14px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            flex-wrap: wrap;
+            border-bottom: 1px solid rgba(255,255,255,.08);
+            background: rgba(255,255,255,.025);
+        }
+
+        .html-preview-header > div:first-child {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        #htmlPreviewStatus {
+            font-size: 12px;
+            opacity: .65;
+        }
+
+        .html-preview-actions {
+            display: flex;
+            align-items: center;
+            gap: 7px;
+            flex-wrap: wrap;
+        }
+
+        .html-preview-actions button {
+            border: 1px solid rgba(255,255,255,.12);
+            background: rgba(255,255,255,.06);
+            color: inherit;
+            border-radius: 9px;
+            padding: 7px 11px;
+            cursor: pointer;
+        }
+
+        .html-preview-actions button:hover {
+            background: rgba(255,255,255,.12);
+        }
+
+        #htmlPreviewViewport {
+            position: relative;
+            width: 100%;
+            height: 520px;
+            min-width: 320px;
+            min-height: 280px;
+            max-width: 100%;
+            margin: 0 auto;
+            overflow: hidden;
+            background: white;
+            resize: none;
+        }
+
+        #htmlPreviewFrame {
+            display: block;
+            width: 100%;
+            height: 100%;
+            border: 0;
+            background: white;
+        }
+
+        #htmlPreviewResizeHandle {
+            position: absolute;
+            right: 0;
+            bottom: 0;
+            width: 24px;
+            height: 24px;
+            cursor: nwse-resize;
+            z-index: 10;
+            background:
+                linear-gradient(
+                    135deg,
+                    transparent 45%,
+                    rgba(0,0,0,.35) 46%,
+                    rgba(0,0,0,.35) 52%,
+                    transparent 53%
+                );
+        }
+
+        @media (max-width: 700px) {
+
+            #htmlPreviewViewport {
+                height: 420px;
+                min-width: 100%;
+            }
+
+            .html-preview-header {
+                align-items: flex-start;
+            }
+        }
+    `;
+
+    document.head.appendChild(style);
+}
+
+function initHTMLPreview() {
+
+    injectHTMLPreviewStyles();
+
+    if (!ensureHTMLPreviewUI()) {
+        return;
+    }
+
+    const runButton =
+        document.getElementById(
+            "htmlPreviewRunBtn"
+        );
+
+    const liveButton =
+        document.getElementById(
+            "htmlPreviewLiveBtn"
+        );
+
+    const refreshButton =
+        document.getElementById(
+            "htmlPreviewRefreshBtn"
+        );
+
+    if (runButton) {
+
+        runButton.addEventListener(
+            "click",
+            () => {
+                activateHTMLPreview();
+            }
+        );
+    }
+
+    if (liveButton) {
+
+        liveButton.addEventListener(
+            "click",
+            () => {
+                toggleHTMLPreviewMode();
+            }
+        );
+    }
+
+    if (refreshButton) {
+
+        refreshButton.addEventListener(
+            "click",
+            () => {
+                updateHTMLPreview();
+            }
+        );
+    }
+
+    document
+        .querySelectorAll(
+            ".html-size-btn"
+        )
+        .forEach((button) => {
+
+            button.addEventListener(
+                "click",
+                () => {
+
+                    setHTMLPreviewSize(
+                        button.dataset.size
+                    );
+                }
+            );
+        });
+
+    initHTMLPreviewResize();
+
+    /*
+      Code editor me typing karte hi
+      preview automatically update hoga.
+    */
+
+    const editor =
+        document.querySelector(
+            "#codeInput"
+        ) ||
+        document.querySelector(
+            "#codeEditor"
+        ) ||
+        document.querySelector(
+            "textarea[name='code']"
+        );
+
+    if (editor) {
+
+        editor.addEventListener(
+            "input",
+            () => {
+
+                const language =
+                    getRunLanguage();
+
+                if (
+                    isHTMLRunLanguage(
+                        language
+                    )
+                ) {
+                    activateHTMLPreview();
+                    scheduleHTMLPreviewUpdate();
+                }
+            }
+        );
+    }
+}
+
+/* Initialize HTML Preview */
+if (
+    document.readyState ===
+    "loading"
+) {
+
+    document.addEventListener(
+        "DOMContentLoaded",
+        initHTMLPreview
+    );
+
+} else {
+
+    initHTMLPreview();
+}
