@@ -69,11 +69,11 @@ app.use(
   })
 );
 
-app.use(
-  express.static(
-    path.join(__dirname, "public")
-  )
-);
+// app.use(
+//   express.static(
+//     path.join(__dirname, "public")
+//   )
+// );
 
 app.use(
   express.static(
@@ -1188,9 +1188,15 @@ app.get(
 // CREATE NOTE
 // =====================================================
 
+// =====================================================
+// CREATE NOTE
+// OWNER + NORMAL USER
+// =====================================================
+
 app.post(
   "/api/notes",
   requireDatabase,
+  verifyToken,
   async (req, res) => {
     try {
       const {
@@ -1203,58 +1209,115 @@ app.post(
         visibility,
       } = req.body;
 
-      const cleanUserName =
-        String(
-          userName || ""
-        ).trim();
+      // -----------------------------------------------
+      // USER FROM JWT TOKEN
+      // -----------------------------------------------
+      const loggedInUserName = String(
+        req.user?.name || ""
+      ).trim();
 
-      const cleanSubject =
-        String(
-          subject || ""
-        ).trim();
+      if (!loggedInUserName) {
+        return res.status(401).json({
+          success: false,
+          message: "Valid logged-in user required",
+        });
+      }
 
-      const cleanQuestion =
-        String(
-          question || ""
-        ).trim();
+      // -----------------------------------------------
+      // SECURITY CHECK
+      // -----------------------------------------------
+      // Frontend se aaya userName JWT user se match
+      // hona chahiye.
+      const cleanUserName = String(
+        userName || ""
+      ).trim();
 
-      const cleanAnswer =
-        String(
-          answer || ""
-        );
+      if (
+        cleanUserName &&
+        cleanUserName !== loggedInUserName
+      ) {
+        return res.status(403).json({
+          success: false,
+          message: "User identity mismatch",
+        });
+      }
 
-      const cleanCode =
-        String(
-          code || ""
-        );
+      const finalUserName =
+        loggedInUserName;
 
-      const cleanLanguage =
-        String(
-          language || "text"
-        );
+      // -----------------------------------------------
+      // CLEAN DATA
+      // -----------------------------------------------
+      const cleanSubject = String(
+        subject || ""
+      ).trim();
+
+      const cleanQuestion = String(
+        question || ""
+      ).trim();
+
+      const cleanAnswer = String(
+        answer || ""
+      );
+
+      const cleanCode = String(
+        code || ""
+      );
+
+      const cleanLanguage = String(
+        language || "text"
+      );
 
       const noteVisibility =
         visibility === "public"
           ? "public"
           : "private";
 
+      // -----------------------------------------------
+      // REQUIRED FIELD CHECK
+      // -----------------------------------------------
       if (
         !cleanSubject ||
         !cleanQuestion ||
-        !cleanAnswer ||
-        !cleanUserName
+        !cleanAnswer
       ) {
         return res.status(400).json({
           success: false,
           message:
-            "Subject, question, answer and user name are required",
+            "Subject, question and answer are required",
         });
       }
 
-      const user =
-        await User.findOne({
-          name: cleanUserName,
+      // -----------------------------------------------
+      // OWNER
+      // -----------------------------------------------
+      // Owner MongoDB users collection mein nahi hai.
+      // Owner .env se authenticate hota hai.
+      if (
+        req.user.role === "owner" &&
+        loggedInUserName === OWNER_USER_ID
+      ) {
+        const note = await Note.create({
+          subject: cleanSubject,
+          question: cleanQuestion,
+          answer: cleanAnswer,
+          code: cleanCode,
+          language: cleanLanguage,
+          userName: finalUserName,
+          visibility: noteVisibility,
+          createdAt: new Date(),
+          updatedAt: new Date(),
         });
+
+        return res.status(201).json(note);
+      }
+
+      // -----------------------------------------------
+      // NORMAL USER
+      // -----------------------------------------------
+      const user = await User.findOne({
+        name: finalUserName,
+      });
 
       if (
         !user ||
@@ -1267,39 +1330,23 @@ app.post(
         });
       }
 
-      const note =
-        await Note.create({
-          subject:
-            cleanSubject,
+      // -----------------------------------------------
+      // CREATE NOTE
+      // -----------------------------------------------
+      const note = await Note.create({
+        subject: cleanSubject,
+        question: cleanQuestion,
+        answer: cleanAnswer,
+        code: cleanCode,
+        language: cleanLanguage,
+        userName: finalUserName,
+        visibility: noteVisibility,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
 
-          question:
-            cleanQuestion,
+      return res.status(201).json(note);
 
-          answer:
-            cleanAnswer,
-
-          code:
-            cleanCode,
-
-          language:
-            cleanLanguage,
-
-          userName:
-            cleanUserName,
-
-          visibility:
-            noteVisibility,
-
-          createdAt:
-            new Date(),
-
-          updatedAt:
-            new Date(),
-        });
-
-      return res.status(201).json(
-        note
-      );
     } catch (error) {
       console.error(
         "CREATE NOTE ERROR:",
@@ -1309,7 +1356,8 @@ app.post(
       return res.status(500).json({
         success: false,
         message:
-          error.message,
+          error.message ||
+          "Failed to create note",
       });
     }
   }
@@ -2467,12 +2515,16 @@ async function executeCode({
   //   };
   // }
 
-  // ===================================================
+// ===================================================
 // INPUT VALIDATION
 // ===================================================
 
 const sourceCode = String(code || "");
-const userInput = String(input || "").trim();
+
+const userInput =
+  input === null || input === undefined
+    ? ""
+    : String(input);
 
 // ---------------------------------------------------
 // C / C++ numeric scanf validation
@@ -2481,18 +2533,16 @@ const userInput = String(input || "").trim();
 if (
   (cleanLanguage === "c" || cleanLanguage === "cpp") &&
   /\bscanf\s*\(\s*["'][^"']*%[fdiu]/i.test(sourceCode) &&
-  userInput
+  userInput.trim()
 ) {
   const firstInputValue = userInput
+    .trim()
     .split(/\s+/)[0]
     .trim();
 
-  const numericValue =
-    Number(firstInputValue);
+  const numericValue = Number(firstInputValue);
 
-  if (
-    Number.isNaN(numericValue)
-  ) {
+  if (Number.isNaN(numericValue)) {
     return {
       success: false,
       output:
@@ -2510,32 +2560,32 @@ if (
 // Empty input check
 // ---------------------------------------------------
 
-const hasInputFunction =
-  (
-    cleanLanguage === "c" ||
-    cleanLanguage === "cpp"
-  ) &&
-  (
-    /\bscanf\s*\(/i.test(sourceCode) ||
-    /\bgets\s*\(/i.test(sourceCode) ||
-    /\bfgets\s*\(/i.test(sourceCode) ||
-    /\bcin\s*>>/i.test(sourceCode) ||
-    /\bgetline\s*\(/i.test(sourceCode)
-  );
+// const hasInputFunction =
+//   (
+//     cleanLanguage === "c" ||
+//     cleanLanguage === "cpp"
+//   ) &&
+//   (
+//     /\bscanf\s*\(/i.test(sourceCode) ||
+//     /\bgets\s*\(/i.test(sourceCode) ||
+//     /\bfgets\s*\(/i.test(sourceCode) ||
+//     /\bcin\s*>>/i.test(sourceCode) ||
+//     /\bgetline\s*\(/i.test(sourceCode)
+//   );
 
-if (
-  hasInputFunction &&
-  !userInput
-) {
-  return {
-    success: false,
-    output:
-      "INPUT REQUIRED\n" +
-      "==============================\n" +
-      "This program requires user input.\n\n" +
-      "Please enter the required input in the Input/Stdin box and run again.",
-  };
-}
+// if (
+//   hasInputFunction &&
+//   !userInput
+// ) {
+//   return {
+//     success: false,
+//     output:
+//       "INPUT REQUIRED\n" +
+//       "==============================\n" +
+//       "This program requires user input.\n\n" +
+//       "Please enter the required input in the Input/Stdin box and run again.",
+//   };
+// }
 
   // ===================================================
   // CODE VALIDATION
@@ -2892,47 +2942,80 @@ const submissionResponse =
       // =================================================
 
       const stdout =
-        decodeJudge0Value(
-          result?.stdout
-        );
+  decodeJudge0Value(
+    result?.stdout
+  );
 
-      const stderr =
-        decodeJudge0Value(
-          result?.stderr
-        );
+const stderr =
+  decodeJudge0Value(
+    result?.stderr
+  );
 
-      const compileOutput =
-        decodeJudge0Value(
-          result?.compile_output
-        );
+const compileOutput =
+  decodeJudge0Value(
+    result?.compile_output
+  );
 
-      const message =
-        decodeJudge0Value(
-          result?.message
-        );
+const message =
+  decodeJudge0Value(
+    result?.message
+  );
 
+// =================================================
+// DEBUG OUTPUT
+// =================================================
+
+console.log(
+  "======================================"
+);
+
+console.log(
+  "JUDGE0 INPUT:",
+  JSON.stringify(String(input ?? ""))
+);
+
+console.log(
+  "JUDGE0 RAW STDOUT:",
+  JSON.stringify(result?.stdout)
+);
+
+console.log(
+  "JUDGE0 DECODED STDOUT:",
+  JSON.stringify(stdout)
+);
+
+console.log(
+  "JUDGE0 STDERR:",
+  JSON.stringify(stderr)
+);
+
+console.log(
+  "JUDGE0 COMPILE OUTPUT:",
+  JSON.stringify(compileOutput)
+);
+
+console.log(
+  "======================================"
+);
 
       // =================================================
       // ACCEPTED
       // status 3 = Accepted
       // =================================================
 
-      if (
-        statusId === 3
-      ) {
+      if (statusId === 3) {
+    console.log("======================================");
+    console.log("JUDGE0 INPUT:", JSON.stringify(String(input ?? "")));
+    console.log("JUDGE0 RAW RESULT:", JSON.stringify(result, null, 2));
+    console.log("JUDGE0 DECODED STDOUT:", JSON.stringify(stdout));
+    console.log("JUDGE0 STDERR:", JSON.stringify(stderr));
+    console.log("======================================");
 
-        console.log(
-          "PROGRAM EXECUTION SUCCESS"
-        );
-
-        return {
-          success: true,
-
-          output:
-            stdout ||
-            "Program executed successfully.",
-        };
-      }
+    return {
+        success: true,
+        output: stdout,
+    };
+}
 
 
       // =================================================
@@ -3049,9 +3132,14 @@ app.post(
         Boolean(code)
       );
       console.log(
-        "Input received:",
-        Boolean(input)
-      );
+  "Input received:",
+  Boolean(input)
+);
+
+console.log(
+  "Input value:",
+  JSON.stringify(input)
+);
       console.log(
         "======================================"
       );
