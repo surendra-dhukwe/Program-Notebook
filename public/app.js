@@ -914,31 +914,24 @@ async function loadAllData() {
 
     try {
 
-        const user =
-            encodeURIComponent(
-                currentUser.name
-            );
-
-
         const [
-            ownNotesData,
-            visibleNotesData,
-            subjectsData
-        ] = await Promise.all([
+    ownNotesData,
+    visibleNotesData,
+    subjectsData
+] = await Promise.all([
 
-            apiRequest(
-                `/notes?user=${user}`
-            ),
+    apiRequest(
+        "/notes"
+    ),
 
-            apiRequest(
-                `/visible-notes?user=${user}`
-            ),
+    apiRequest(
+        "/visible-notes"
+    ),
 
-            apiRequest(
-                `/subjects?user=${user}`
-            )
-        ]);
-
+    apiRequest(
+        "/subjects"
+    )
+]);
 
         myNotes =
             Array.isArray(
@@ -2255,13 +2248,14 @@ function codeNeedsInput(code, language) {
     const source = String(code || "");
 
     if (lang === "c" || lang === "cpp") {
-        return (
-            /\bscanf\s*\(/.test(source) ||
-            /\bcin\s*>>/.test(source) ||
-            /\bgetline\s*\(/.test(source) ||
-            /\bgetchar\s*\(/.test(source)
-        );
-    }
+    return (
+        /\bscanf\s*\(/.test(source) ||
+        /\bcin\s*>>/.test(source) ||
+        /\bgetline\s*\(/.test(source) ||
+        /\bgetchar\s*\(/.test(source) ||
+        /\bfgets\s*\(/.test(source)
+    );
+}
 
     if (lang === "python") {
         return /\binput\s*\(/.test(source);

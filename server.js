@@ -930,29 +930,27 @@ app.post(
 app.get(
   "/api/notes",
   requireDatabase,
+  verifyToken,
   async (req, res) => {
     try {
-      const userName =
-        String(
-          req.query.user || ""
-        ).trim();
+      const isOwner =
+        req.user?.role === "owner";
 
-      if (!userName) {
-        return res.status(400).json({
-          success: false,
-          message:
-            "User name is required",
-        });
-      }
+      const filter = isOwner
+        ? {}
+        : {
+            userName: req.user.name,
+          };
 
       const notes =
-        await Note.find({
-          userName,
-        }).sort({
-          createdAt: -1,
-        });
+        await Note.find(filter)
+          .sort({
+            createdAt: -1,
+          })
+          .lean();
 
       return res.json(notes);
+
     } catch (error) {
       console.error(
         "GET NOTES ERROR:",
@@ -962,7 +960,8 @@ app.get(
       return res.status(500).json({
         success: false,
         message:
-          error.message,
+          error.message ||
+          "Unable to load notes",
       });
     }
   }
@@ -1004,46 +1003,46 @@ app.get(
 );
 
 // =====================================================
-// VISIBLE NOTES
+// VISIBLE NOTES — PRIVATE NOTES SECURITY
 // =====================================================
 
 app.get(
   "/api/visible-notes",
   requireDatabase,
+  verifyToken,
   async (req, res) => {
     try {
-      const userName =
-        String(
-          req.query.user || ""
-        ).trim();
+      const isOwner =
+        req.user?.role === "owner";
 
-      if (!userName) {
-        return res.status(400).json({
-          success: false,
-          message:
-            "User name is required",
-        });
-      }
+      let filter;
 
-      const notes =
-        await Note.find({
+      if (isOwner) {
+        // OWNER / ADMIN: Sabhi notes
+        filter = {};
+      } else {
+        // NORMAL USER:
+        // Apni private + sabhi public notes
+        filter = {
           $or: [
             {
-              userName,
-              visibility: "private",
+              userName: req.user.name,
+              visibility: "private"
             },
             {
-              visibility: "public",
-            },
-          ],
-        })
-          .sort({
-            createdAt: -1,
-          })
-          .limit(300)
-          .lean();
+              visibility: "public"
+            }
+          ]
+        };
+      }
+
+      const notes = await Note.find(filter)
+        .sort({ createdAt: -1 })
+        .limit(300)
+        .lean();
 
       return res.json(notes);
+
     } catch (error) {
       console.error(
         "VISIBLE NOTES ERROR:",
@@ -1053,7 +1052,7 @@ app.get(
       return res.status(500).json({
         success: false,
         message:
-          error.message,
+          "Server is currently unavailable. Please try again after some time. Thank you."
       });
     }
   }
@@ -1066,27 +1065,22 @@ app.get(
 app.get(
   "/api/subjects",
   requireDatabase,
+  verifyToken,
   async (req, res) => {
     try {
-      const userName =
-        String(
-          req.query.user || ""
-        ).trim();
+      const isOwner =
+        req.user?.role === "owner";
 
-      if (!userName) {
-        return res.status(400).json({
-          success: false,
-          message:
-            "User name is required",
-        });
-      }
+      const filter = isOwner
+        ? {}
+        : {
+            userName: req.user.name,
+          };
 
       const subjects =
         await Note.aggregate([
           {
-            $match: {
-              userName,
-            },
+            $match: filter,
           },
 
           {
@@ -1113,6 +1107,7 @@ app.get(
           })
         )
       );
+
     } catch (error) {
       console.error(
         "SUBJECTS ERROR:",
@@ -1122,12 +1117,12 @@ app.get(
       return res.status(500).json({
         success: false,
         message:
-          error.message,
+          error.message ||
+          "Unable to load subjects",
       });
     }
   }
 );
-
 // =====================================================
 // PUBLIC SUBJECTS
 // =====================================================
@@ -1370,77 +1365,54 @@ app.post(
 app.put(
   "/api/notes/:id",
   requireDatabase,
+  verifyToken,
   async (req, res) => {
     try {
-      const id =
-        req.params.id;
-
       const {
         subject,
         question,
         answer,
         code,
         language,
-        userName,
         visibility,
       } = req.body;
 
-      const cleanUserName =
-        String(
-          userName || ""
-        ).trim();
+      const isOwner =
+        req.user?.role === "owner";
 
-      if (
-        !subject ||
-        !question ||
-        !answer ||
-        !cleanUserName
-      ) {
-        return res.status(400).json({
-          success: false,
-          message:
-            "Subject, question, answer and user name are required",
-        });
-      }
+      // Owner can update any note
+      // Normal user can update only own note
+      const filter = isOwner
+        ? {
+            _id: req.params.id,
+          }
+        : {
+            _id: req.params.id,
+            userName: req.user.name,
+          };
 
       const note =
         await Note.findOneAndUpdate(
-          {
-            _id: id,
-            userName:
-              cleanUserName,
-          },
+          filter,
 
           {
             subject:
-              String(
-                subject
-              ).trim(),
+              String(subject || "").trim(),
 
             question:
-              String(
-                question
-              ).trim(),
+              String(question || "").trim(),
 
             answer:
-              String(
-                answer
-              ),
+              String(answer || ""),
 
             code:
-              String(
-                code || ""
-              ),
+              String(code || ""),
 
             language:
-              String(
-                language ||
-                "text"
-              ),
+              String(language || "text"),
 
             visibility:
-              visibility ===
-              "public"
+              visibility === "public"
                 ? "public"
                 : "private",
 
@@ -1462,9 +1434,8 @@ app.put(
         });
       }
 
-      return res.json(
-        note
-      );
+      return res.json(note);
+
     } catch (error) {
       console.error(
         "UPDATE NOTE ERROR:",
@@ -1474,7 +1445,8 @@ app.put(
       return res.status(500).json({
         success: false,
         message:
-          error.message,
+          error.message ||
+          "Failed to update note",
       });
     }
   }
@@ -1487,35 +1459,17 @@ app.put(
 app.patch(
   "/api/notes/:id/visibility",
   requireDatabase,
+  verifyToken,
   async (req, res) => {
     try {
-      const id =
-        req.params.id;
-
-      const userName =
-        String(
-          req.body?.userName ||
-          ""
-        ).trim();
-
       const visibility =
         req.body?.visibility;
-
-      if (!userName) {
-        return res.status(400).json({
-          success: false,
-          message:
-            "User name is required",
-        });
-      }
 
       if (
         ![
           "public",
           "private",
-        ].includes(
-          visibility
-        )
+        ].includes(visibility)
       ) {
         return res.status(400).json({
           success: false,
@@ -1524,12 +1478,23 @@ app.patch(
         });
       }
 
+      const isOwner =
+        req.user?.role === "owner";
+
+      // Owner can change any note
+      // Normal user can change only own note
+      const filter = isOwner
+        ? {
+            _id: req.params.id,
+          }
+        : {
+            _id: req.params.id,
+            userName: req.user.name,
+          };
+
       const note =
         await Note.findOneAndUpdate(
-          {
-            _id: id,
-            userName,
-          },
+          filter,
 
           {
             visibility,
@@ -1539,6 +1504,7 @@ app.patch(
 
           {
             new: true,
+            runValidators: true,
           }
         );
 
@@ -1552,10 +1518,13 @@ app.patch(
 
       return res.json({
         success: true,
+
         message:
           `Note is now ${visibility}`,
+
         note,
       });
+
     } catch (error) {
       console.error(
         "VISIBILITY ERROR:",
@@ -1565,7 +1534,8 @@ app.patch(
       return res.status(500).json({
         success: false,
         message:
-          error.message,
+          error.message ||
+          "Failed to change visibility",
       });
     }
   }
@@ -1578,29 +1548,27 @@ app.patch(
 app.delete(
   "/api/notes/:id",
   requireDatabase,
+  verifyToken,
   async (req, res) => {
     try {
-      const id =
-        req.params.id;
+      const isOwner =
+        req.user?.role === "owner";
 
-      const userName =
-        String(
-          req.query.user || ""
-        ).trim();
-
-      if (!userName) {
-        return res.status(400).json({
-          success: false,
-          message:
-            "User name is required",
-        });
-      }
+      // Owner can delete any note
+      // Normal user can delete only own note
+      const filter = isOwner
+        ? {
+            _id: req.params.id,
+          }
+        : {
+            _id: req.params.id,
+            userName: req.user.name,
+          };
 
       const note =
-        await Note.findOneAndDelete({
-          _id: id,
-          userName,
-        });
+        await Note.findOneAndDelete(
+          filter
+        );
 
       if (!note) {
         return res.status(404).json({
@@ -1615,6 +1583,7 @@ app.delete(
         message:
           "Note deleted successfully",
       });
+
     } catch (error) {
       console.error(
         "DELETE NOTE ERROR:",
@@ -1624,7 +1593,8 @@ app.delete(
       return res.status(500).json({
         success: false,
         message:
-          error.message,
+          error.message ||
+          "Failed to delete note",
       });
     }
   }
